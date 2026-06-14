@@ -31,7 +31,7 @@ Hyco Monitor 是一款专为 macOS 设计的轻量级系统监控与实用工具
 
 1. 克隆本仓库到本地：
    ```bash
-   git clone https://github.com/yourusername/Hyco-Monitor.git
+   git clone https://github.com/HYC6113/Hyco_Monitor.git
    ```
 2. 使用 Xcode 打开 `Hyco Monitor.xcodeproj`。
 3. 选择你的 Mac 作为目标设备（My Mac）。
