@@ -103,6 +103,13 @@ final class TypeRacingGameEngine {
         bestDistanceMeters = 0
     }
 
+    /// 清除进行中的副作用（如错误闪烁），面板关闭时调用。
+    func teardown() {
+        wrongFlashTask?.cancel()
+        wrongFlashTask = nil
+        wrongFlash = false
+    }
+
     func tick(delta: TimeInterval) {
         guard phase == .playing, delta > 0, delta < 0.5 else { return }
 

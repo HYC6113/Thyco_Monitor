@@ -4,7 +4,7 @@ import SwiftUI
 
 enum MonitorPanelLayout {
     /// 整体界面等比例缩放（设计稿尺寸 × scale = 实际 NSPanel 尺寸）
-    static let scale: CGFloat = 0.92
+    static let scale: CGFloat = 0.84
 
     static let designWidth: CGFloat = 520
 
@@ -31,6 +31,8 @@ enum MonitorPanelLayout {
     }
     static let headerHeight: CGFloat = 28
     static let footerHeight: CGFloat = 20
+    /// 充电功率胶囊文字区固定宽度（适配「充电功率 100W / Chg. 100W」）
+    static let chargingPowerCapsuleContentWidth: CGFloat = 88
 
     /// 上方四张卡片区域高度（两行 + 行间距）
     static var upperCardsHeight: CGFloat {

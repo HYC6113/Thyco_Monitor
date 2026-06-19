@@ -11,7 +11,9 @@ final class TypeRacingGameController: NSObject {
     override init() {
         super.init()
         windowDelegate.onClose = { [weak self] in
-            self?.panel = nil
+            Task { @MainActor in
+                self?.dismiss()
+            }
         }
     }
 
@@ -25,22 +27,14 @@ final class TypeRacingGameController: NSObject {
         let panelFrame = resolvedPanelFrame(relativeTo: monitorPanel, on: screenFrame)
 
         if let panel {
-            // 已存在则只重新定位并前置；键盘焦点由内部捕获视图自行维持，
-            // 此处不强制 makeFirstResponder(contentView)，否则会抢走输入焦点。
             panel.setFrame(panelFrame, display: true)
-            NSApp.activate(ignoringOtherApps: true)
-            panel.makeKeyAndOrderFront(nil)
+            bringPanelToFront(panel)
             return
         }
 
-        NSApp.activate(ignoringOtherApps: true)
         let contentSize = TypeRacingWindowLayout.contentSize
-
         let panel = FloatingPanel.makeBorderless(contentRect: panelFrame)
-        panel.level = .floating
-        panel.isMovableByWindowBackground = true
-        panel.becomesKeyOnlyIfNeeded = false
-        panel.delegate = windowDelegate
+        applyGamePanelConfiguration(to: panel)
 
         let rootView = TypeRacingGameView(
             language: language,
@@ -55,14 +49,29 @@ final class TypeRacingGameController: NSObject {
         hostingController.view.setFrameSize(NSSize(width: contentSize.width, height: contentSize.height))
 
         panel.contentViewController = hostingController
-
         self.panel = panel
-        panel.makeKeyAndOrderFront(nil)
+        bringPanelToFront(panel)
     }
 
     func dismiss() {
-        panel?.orderOut(nil)
-        panel = nil
+        guard let panel else { return }
+        panel.orderOut(nil)
+        panel.contentViewController = nil
+        panel.delegate = nil
+        self.panel = nil
+    }
+
+    private func bringPanelToFront(_ panel: FloatingPanel) {
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    private func applyGamePanelConfiguration(to panel: FloatingPanel) {
+        panel.level = .floating
+        panel.isMovableByWindowBackground = true
+        panel.becomesKeyOnlyIfNeeded = false
+        panel.animationBehavior = .utilityWindow
+        panel.delegate = windowDelegate
     }
 
     private func resolvedPanelFrame(relativeTo monitorPanel: NSWindow?, on screenFrame: NSRect) -> NSRect {

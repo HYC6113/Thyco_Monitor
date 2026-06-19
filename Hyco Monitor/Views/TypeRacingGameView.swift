@@ -8,11 +8,9 @@ struct TypeRacingGameView: View {
     let onClose: () -> Void
 
     @State private var engine = TypeRacingGameEngine()
-    /// 帧计时基准放在引用类型里，更新它不会触发 SwiftUI 视图失效，
-    /// 避免游戏结束/待开始时仍以 60fps 重绘（重绘含模糊与提示卡片，拖动会卡顿）。
+    /// 仅在 `.playing` 阶段订阅，避免待开始/结束时仍以 60Hz 唤醒 SwiftUI。
+    @State private var frameTimerCancellable: AnyCancellable?
     @State private var frameClock = FrameClock()
-    /// 只创建一次的帧计时器，避免每次 body 求值都重建发布者。
-    @State private var frameTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
     @State private var isEscCapsuleHovering = false
     @State private var isClearDataHovering = false
 
@@ -59,15 +57,32 @@ struct TypeRacingGameView: View {
         .onAppear {
             engine.prepare(language: language)
             frameClock.last = Date()
+            syncFrameTimer(for: engine.phase)
         }
-        .onReceive(frameTimer) { now in
-            let last = frameClock.last
-            frameClock.last = now
-            // 仅在游戏进行中推进与重绘；其余阶段画面静止，不产生逐帧失效。
-            guard engine.phase == .playing else { return }
-            engine.tick(delta: now.timeIntervalSince(last))
+        .onChange(of: engine.phase) { _, phase in
+            syncFrameTimer(for: phase)
+        }
+        .onDisappear {
+            frameTimerCancellable?.cancel()
+            frameTimerCancellable = nil
+            engine.teardown()
         }
         .preferredColorScheme(colorScheme)
+    }
+
+    private func syncFrameTimer(for phase: TypeRacingPhase) {
+        frameTimerCancellable?.cancel()
+        frameTimerCancellable = nil
+        guard phase == .playing else { return }
+
+        frameClock.last = Date()
+        frameTimerCancellable = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { now in
+                let last = frameClock.last
+                frameClock.last = now
+                engine.tick(delta: now.timeIntervalSince(last))
+            }
     }
 
     // MARK: - 浮动面板外观
@@ -252,25 +267,41 @@ struct TypeRacingGameView: View {
             Rectangle()
                 .fill(bezel)
 
-            gameStagePlayfield
-                .blur(radius: showsStageMessage ? 7 : 0)
-                .brightness(showsStageMessage ? -0.06 : 0)
-                .animation(.easeOut(duration: 0.22), value: showsStageMessage)
+            idleStageSnapshot {
+                gameStagePlayfield
 
-            distanceHUD
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.top, 10)
-                .padding(.trailing, 12)
+                if showsStageMessage {
+                    // 用静态遮罩替代实时 blur，避免拖动窗口时每帧重算高斯模糊。
+                    Color.black.opacity(0.42)
+                        .allowsHitTesting(false)
+                }
 
-            if engine.phase == .ready {
-                stageMessageOverlay { readyOverlay }
-            }
+                distanceHUD
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 10)
+                    .padding(.trailing, 12)
 
-            if engine.phase == .caught {
-                stageMessageOverlay { caughtOverlay }
+                if engine.phase == .ready {
+                    stageMessageOverlay { readyOverlay }
+                }
+
+                if engine.phase == .caught {
+                    stageMessageOverlay { caughtOverlay }
+                }
             }
         }
         .frame(height: TypeRacingWindowLayout.sceneHeight)
+    }
+
+    /// 非进行中的阶段画面静止，栅格化后拖动窗口只需平移位图。
+    @ViewBuilder
+    private func idleStageSnapshot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if engine.phase == .playing {
+            content()
+        } else {
+            content()
+                .drawingGroup(opaque: false, colorMode: .nonLinear)
+        }
     }
 
     private var gameStagePlayfield: some View {
@@ -393,38 +424,40 @@ struct TypeRacingGameView: View {
         let laneWidth = TypeRacingWindowLayout.typingLaneWidth
         let laneBG = isDark ? TypeRacingPixelStyle.screenBGDark : TypeRacingPixelStyle.screenBG
 
-        return ZStack(alignment: .leading) {
-            Color.clear
-                .onAppear { engine.configureLaneWidth(laneWidth) }
-
-            Rectangle()
-                .fill(laneBG)
-                .overlay {
-                    laneScanlineOverlay
-                        .allowsHitTesting(false)
-                }
-
+        return idleStageSnapshot {
             ZStack(alignment: .leading) {
-                ForEach(engine.visibleCharacters()) { item in
-                    let snappedX = item.x.rounded(.down)
-                    Text(String(item.character))
-                        .font(TypeRacingPixelStyle.font(size: 22))
-                        .foregroundStyle(color(for: item.state))
-                        .shadow(color: glowColor(for: item.state), radius: glowRadius(for: item.state))
-                        .shadow(color: glowColor(for: item.state).opacity(0.5), radius: glowRadius(for: item.state) * 2)
-                        .position(x: snappedX, y: TypeRacingGameEngine.laneHeight / 2)
-                }
-            }
-            .frame(width: laneWidth, height: TypeRacingGameEngine.laneHeight)
-            .clipped()
+                Color.clear
+                    .onAppear { engine.configureLaneWidth(laneWidth) }
 
-            Rectangle()
-                .fill(TypeRacingPixelStyle.danger)
-                .frame(width: 3)
-                .shadow(color: TypeRacingPixelStyle.danger.opacity(0.8), radius: 4)
-                .offset(x: TypeRacingGameEngine.catchLineX - 1)
-                .zIndex(1)
-                .allowsHitTesting(false)
+                Rectangle()
+                    .fill(laneBG)
+                    .overlay {
+                        laneScanlineOverlay
+                            .allowsHitTesting(false)
+                    }
+
+                ZStack(alignment: .leading) {
+                    ForEach(engine.visibleCharacters()) { item in
+                        let snappedX = item.x.rounded(.down)
+                        Text(String(item.character))
+                            .font(TypeRacingPixelStyle.font(size: 22))
+                            .foregroundStyle(color(for: item.state))
+                            .shadow(color: glowColor(for: item.state), radius: glowRadius(for: item.state))
+                            .shadow(color: glowColor(for: item.state).opacity(0.5), radius: glowRadius(for: item.state) * 2)
+                            .position(x: snappedX, y: TypeRacingGameEngine.laneHeight / 2)
+                    }
+                }
+                .frame(width: laneWidth, height: TypeRacingGameEngine.laneHeight)
+                .clipped()
+
+                Rectangle()
+                    .fill(TypeRacingPixelStyle.danger)
+                    .frame(width: 3)
+                    .shadow(color: TypeRacingPixelStyle.danger.opacity(0.8), radius: 4)
+                    .offset(x: TypeRacingGameEngine.catchLineX - 1)
+                    .zIndex(1)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: laneWidth, height: TypeRacingGameEngine.laneHeight)
         .frame(maxWidth: .infinity)
@@ -479,25 +512,20 @@ struct TypeRacingGameView: View {
                         cornerRadius: TypeRacingWindowLayout.messageCardCornerRadius,
                         style: .continuous
                     )
-                    ZStack {
-                        shape.fill(Color.black.opacity(0.7))
-                        // 卡片内的磷光中心晕染
-                        shape.fill(
-                            RadialGradient(
-                                colors: [
-                                    TypeRacingPixelStyle.screenGlow.opacity(0.10),
-                                    .clear
-                                ],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 120
+                    shape.fill(Color.black.opacity(0.78))
+                        .overlay {
+                            shape.fill(
+                                RadialGradient(
+                                    colors: [
+                                        TypeRacingPixelStyle.screenGlow.opacity(0.08),
+                                        .clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 120
+                                )
                             )
-                        )
-                        // 卡片内扫描线，与屏幕一致的 CRT 质感
-                        laneScanlineOverlay
-                            .clipShape(shape)
-                            .opacity(0.7)
-                    }
+                        }
                 }
                 .overlay {
                     RoundedRectangle(
@@ -509,8 +537,7 @@ struct TypeRacingGameView: View {
                         lineWidth: 1
                     )
                 }
-                .shadow(color: TypeRacingPixelStyle.screenGlow.opacity(0.25), radius: 8)
-                .shadow(color: .black.opacity(0.45), radius: 10, y: 2)
+                .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(6)

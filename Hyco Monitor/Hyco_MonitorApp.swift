@@ -66,6 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalEventMonitor: Any?
     private var localEventMonitor: Any?
     private var isPanelClosing = false
+    /// 每次发起关闭动画递增；完成回调仅在同代次时执行 orderOut，避免取消关闭后仍被隐藏。
+    private var closeAnimationGeneration: UInt = 0
     private let monitorViewModel = SystemMonitorViewModel()
     private let screenCleanController = ScreenCleanController()
     private let typeRacingGameController = TypeRacingGameController()
@@ -98,7 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.removeObserver(self)
         tearDownEventMonitors()
         MainActor.assumeIsolated {
-            monitorViewModel.stopMonitoring()
+            typeRacingGameController.dismiss()
+            closePanelImmediately()
         }
     }
 
@@ -224,34 +227,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func togglePanel(_ sender: AnyObject?) {
         guard let panel else { return }
-        if panel.isVisible, !isPanelClosing {
+        if isPanelClosing {
+            cancelPanelCloseIfNeeded()
+            return
+        }
+        if panel.isVisible {
             closePanel()
-        } else if !panel.isVisible {
+        } else {
             showPanel()
         }
     }
 
     private func showPanel() {
         guard let panel, let button = statusItem?.button else { return }
-        guard let buttonWindow = button.window else { return }
+        guard let origin = panelOrigin(for: button) else { return }
 
-        isPanelClosing = false
+        cancelPanelCloseIfNeeded()
 
         // 仅在面板可见期间轮询系统指标，隐藏时彻底停掉以降低功耗。
         monitorViewModel.startMonitoring()
 
-        let buttonRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
-        var panelX = buttonRect.midX - MonitorPanelLayout.panelWidth / 2
-        var panelY = buttonRect.minY - MonitorPanelLayout.panelHeight
-
-        if let screen = buttonWindow.screen ?? NSScreen.main {
-            let visibleFrame = screen.visibleFrame
-            panelX = max(visibleFrame.minX + 8, min(panelX, visibleFrame.maxX - MonitorPanelLayout.panelWidth - 8))
-            // 面板上边缘对齐菜单栏下边缘（visibleFrame.maxY 即菜单栏底部）
-            panelY = visibleFrame.maxY - MonitorPanelLayout.panelHeight
-        }
-
-        panel.setFrameOrigin(NSPoint(x: panelX, y: panelY))
+        panel.setFrameOrigin(origin)
         panel.alphaValue = 0
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
@@ -270,21 +266,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         isPanelClosing = true
         removeClickOutsideMonitors()
+        let generation = closeAnimationGeneration &+ 1
+        closeAnimationGeneration = generation
 
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = PanelAnimation.duration
             context.timingFunction = PanelAnimation.timingFunction
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            guard let self, let panel = self.panel else { return }
-            panel.orderOut(nil)
-            panel.alphaValue = 1
-            self.isPanelClosing = false
-            // 面板已隐藏，停止轮询。完成回调运行在主线程，可安全断言主 actor 隔离。
             MainActor.assumeIsolated {
-                self.monitorViewModel.stopMonitoring()
+                guard let self else { return }
+                self.completePanelCloseIfNeeded(generation: generation)
             }
         })
+    }
+
+    @MainActor
+    private func completePanelCloseIfNeeded(generation: UInt) {
+        guard let panel, closeAnimationGeneration == generation else { return }
+        panel.orderOut(nil)
+        panel.alphaValue = 1
+        isPanelClosing = false
+        monitorViewModel.stopMonitoring()
+    }
+
+    /// 退出或终止时跳过动画，直接隐藏并停止轮询。
+    @MainActor
+    private func closePanelImmediately() {
+        closeAnimationGeneration &+= 1
+        isPanelClosing = false
+        removeClickOutsideMonitors()
+        guard let panel, panel.isVisible else { return }
+        panel.orderOut(nil)
+        panel.alphaValue = 1
+        monitorViewModel.stopMonitoring()
+    }
+
+    /// 关闭动画进行中再次点击菜单栏图标时，取消淡出并保持面板可见。
+    private func cancelPanelCloseIfNeeded() {
+        guard isPanelClosing else { return }
+        closeAnimationGeneration &+= 1
+        isPanelClosing = false
+        panel?.alphaValue = 1
+        if panel?.isVisible == true {
+            installClickOutsideMonitors()
+        }
+    }
+
+    /// 面板上边缘对齐菜单栏下边缘，水平方向相对状态栏图标居中并限制在可见区域内。
+    private func panelOrigin(for button: NSStatusBarButton) -> NSPoint? {
+        guard let buttonWindow = button.window else { return nil }
+        let buttonRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
+        var panelX = buttonRect.midX - MonitorPanelLayout.panelWidth / 2
+        guard let screen = buttonWindow.screen ?? NSScreen.main else {
+            return NSPoint(x: panelX, y: buttonRect.minY - MonitorPanelLayout.panelHeight)
+        }
+        let visibleFrame = screen.visibleFrame
+        panelX = max(visibleFrame.minX + 8, min(panelX, visibleFrame.maxX - MonitorPanelLayout.panelWidth - 8))
+        let panelY = visibleFrame.maxY - MonitorPanelLayout.panelHeight
+        return NSPoint(x: panelX, y: panelY)
     }
 
     private func installClickOutsideMonitors() {
@@ -295,13 +335,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
-            if event.type == .keyDown {
-                if event.keyCode == 53 { // Esc 键
-                    self?.closePanel()
-                    return nil
-                }
-            } else if event.type == .leftMouseDown || event.type == .rightMouseDown {
-                self?.closePanelIfClickOutside()
+            guard let self else { return event }
+            switch event.type {
+            case .keyDown where event.keyCode == 53: // Esc：仅主监控面板持有焦点时关闭，避免抢走小游戏 Esc
+                guard let panel = self.panel, panel.isKeyWindow else { return event }
+                self.closePanel()
+                return nil
+            case .leftMouseDown, .rightMouseDown:
+                self.closePanelIfClickOutside()
+            default:
+                break
             }
             return event
         }

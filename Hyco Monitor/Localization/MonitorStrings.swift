@@ -36,6 +36,8 @@ struct MonitorStrings {
     var clearCleanerApp: String { t("清除选择", "Clear Selection") }
     var cleanStorage: String { t("清理", "Clean") }
     var batteryLevel: String { t("电量", "Battery") }
+    var chargingPowerLabel: String { t("充电功率 ", "Chg. ") }
+    func chargingPowerValue(_ watts: String) -> String { "\(watts)W" }
     var cpuLoad: String { t("CPU 负载", "CPU Load") }
     var hideDesktop: String { t("隐藏桌面", "Hide Desktop") }
     var cleanMode: String { t("清洁模式", "Clean Mode") }

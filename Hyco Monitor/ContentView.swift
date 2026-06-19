@@ -293,11 +293,11 @@ private extension ContentView {
                         label: strings.batteryLevel,
                         secondaryText: secondaryText,
                         primaryText: primaryText,
-                        valueColor: viewModel.isBatteryCharging ? batteryChargingColor : nil,
+                        valueColor: batteryMetricValueColor,
                         overlaysLeadingAccessory: true,
                         leadingAccessory: {
                             if viewModel.isBatteryCharging {
-                                BatteryChargingIcon(color: batteryChargingColor)
+                                BatteryChargingIcon(color: batteryMetricValueColor ?? batteryChargingColor)
                             }
                         }
                     )
@@ -414,7 +414,7 @@ private extension ContentView {
     }
 
     var footerSection: some View {
-        HStack {
+        HStack(alignment: .center) {
             LanguageSegmentedControl(
                 selection: Binding(
                     get: { viewModel.appLanguage },
@@ -425,18 +425,46 @@ private extension ContentView {
                 tertiaryText: tertiaryText
             )
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Text("\"MADE BY HYC\"")
-                .font(.system(size: 9, weight: .bold))
-                .tracking(1.0)
-                .foregroundStyle(secondaryText.opacity(0.4))
-                .contentShape(Rectangle())
-                .onTapGesture(count: 3) {
-                    viewModel.resetAllStoredPreferences()
-                }
+            ZStack(alignment: .trailing) {
+                madeByHycLabel
+                    .opacity(viewModel.chargingPowerDisplay == nil ? 1 : 0)
+                    .allowsHitTesting(viewModel.chargingPowerDisplay == nil)
+
+                chargingPowerCapsule
+            }
         }
         .frame(height: MonitorPanelLayout.footerHeight)
+    }
+
+    var madeByHycLabel: some View {
+        Text("\"MADE BY HYC\"")
+            .font(.system(size: 9, weight: .bold))
+            .tracking(1.0)
+            .foregroundStyle(secondaryText.opacity(0.4))
+            .contentShape(Rectangle())
+            .onTapGesture(count: 3) {
+                viewModel.resetAllStoredPreferences()
+            }
+    }
+
+    @ViewBuilder
+    var chargingPowerCapsule: some View {
+        if let watts = viewModel.chargingPowerDisplay {
+            HStack(spacing: 0) {
+                Text(strings.chargingPowerLabel)
+                Text(strings.chargingPowerValue(watts))
+                    .monospacedDigit()
+            }
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(batteryChargingColor)
+            .frame(width: MonitorPanelLayout.chargingPowerCapsuleContentWidth, alignment: .center)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 4)
+            .languageTrackCapsuleChrome(colorScheme: colorScheme)
+            .allowsHitTesting(false)
+        }
     }
 
     var subtleDivider: some View {
@@ -705,6 +733,20 @@ private extension ContentView {
 
     var batteryChargingColor: Color {
         colorScheme == .dark ? Color(hex: 0x30D158) : Color(hex: 0x34C759)
+    }
+
+    var batteryLowColor: Color {
+        colorScheme == .dark ? Color(hex: 0xE06458) : Color(hex: 0xD95048)
+    }
+
+    var batteryMetricValueColor: Color? {
+        if let level = viewModel.batteryPercentage, level <= 20 {
+            return batteryLowColor
+        }
+        if viewModel.isBatteryCharging {
+            return batteryChargingColor
+        }
+        return nil
     }
 }
 

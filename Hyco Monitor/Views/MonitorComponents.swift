@@ -506,24 +506,60 @@ struct MemoryColumn: View {
     }
 }
 
+struct LanguageTrackCapsuleChrome: ViewModifier {
+    let colorScheme: ColorScheme
+
+    private var trackSurfaceFill: Color {
+        colorScheme == .dark
+            ? MonitorDarkPalette.languageTrackFill
+            : MonitorLightPalette.languageTrackFill
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .padding(2)
+            .background {
+                MonitorTheme.capsuleShape
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        MonitorTheme.capsuleShape
+                            .fill(trackSurfaceFill)
+                    )
+                    .overlay(
+                        MonitorTheme.capsuleShape
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.025)
+                                    : Color.white.opacity(0.045)
+                            )
+                    )
+            }
+            .clipShape(MonitorTheme.capsuleShape)
+            .overlay {
+                MonitorTheme.capsuleShape
+                    .strokeBorder(
+                        MonitorTheme.cardBorderGradient(for: colorScheme),
+                        lineWidth: MonitorTheme.borderLineWidth
+                    )
+            }
+            .monitorControlShadow(colorScheme: colorScheme)
+    }
+}
+
+extension View {
+    func languageTrackCapsuleChrome(colorScheme: ColorScheme) -> some View {
+        modifier(LanguageTrackCapsuleChrome(colorScheme: colorScheme))
+    }
+}
+
 struct LanguageSegmentedControl: View {
     @Binding var selection: AppLanguage
     let colorScheme: ColorScheme
     let primaryText: Color
     let tertiaryText: Color
 
-    private var trackBorderGradient: LinearGradient {
-        MonitorTheme.cardBorderGradient(for: colorScheme)
-    }
-
     private var selectedBorderOpacity: Double {
         colorScheme == .dark ? 0.09 : 0.20
-    }
-
-    private var trackSurfaceFill: Color {
-        colorScheme == .dark
-            ? MonitorDarkPalette.languageTrackFill
-            : MonitorLightPalette.languageTrackFill
     }
 
     private var selectedSurfaceFill: Color {
@@ -571,25 +607,7 @@ struct LanguageSegmentedControl: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(2)
-        .background {
-            MonitorTheme.capsuleShape
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    MonitorTheme.capsuleShape
-                        .fill(trackSurfaceFill)
-                )
-                .overlay(
-                    MonitorTheme.capsuleShape
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.025) : Color.white.opacity(0.045))
-                )
-        }
-        .clipShape(MonitorTheme.capsuleShape)
-        .overlay {
-            MonitorTheme.capsuleShape
-                .strokeBorder(trackBorderGradient, lineWidth: MonitorTheme.borderLineWidth)
-        }
-        .monitorControlShadow(colorScheme: colorScheme)
+        .languageTrackCapsuleChrome(colorScheme: colorScheme)
     }
 }
 

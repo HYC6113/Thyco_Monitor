@@ -63,6 +63,16 @@ final class SMCService: @unchecked Sendable {
         }
     }
 
+    nonisolated func dcInPower() -> Double? {
+        if let pdtr = readNumericValue(forKey: "PDTR"), pdtr > 0 {
+            return pdtr
+        }
+        if let v = readNumericValue(forKey: "VD0R"), let i = readNumericValue(forKey: "ID0R"), v > 0, i > 0 {
+            return v * i
+        }
+        return nil
+    }
+
     nonisolated(unsafe) private var cachedFanCount: Int?
 
     nonisolated private func fanCount() -> Int {

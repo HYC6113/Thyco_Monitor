@@ -29,6 +29,9 @@ final class SystemMonitorViewModel {
         viewModel.totalStorageDisplay = "1 TB"
         viewModel.storageUsageFraction = 0.688
         viewModel.batteryDisplay = "87%"
+        viewModel.batteryPercentage = 87
+        viewModel.isBatteryCharging = true
+        viewModel.chargingPowerDisplay = "45"
         viewModel.cpuLoadDisplay = "23"
         viewModel.memoryOverview = [
             (.physicalMemory, "16 GB", true),
@@ -71,7 +74,9 @@ final class SystemMonitorViewModel {
 
     // Battery / Tools
     var batteryDisplay = "—"
+    var batteryPercentage: Int?
     var isBatteryCharging = false
+    var chargingPowerDisplay: String?
     var cpuLoadDisplay = "0"
     var hideDesktop = false
     var cleanMode = false
@@ -301,7 +306,8 @@ final class SystemMonitorViewModel {
                     hardware: HardwareMonitor.snapshot(),
                     network: NetworkMonitor.snapshot(),
                     cpu: CPUMonitor.snapshot(),
-                    memory: MemoryMonitor.snapshot()
+                    memory: MemoryMonitor.snapshot(),
+                    battery: BatteryMonitor.snapshot()
                 )
             }.value
 
@@ -312,6 +318,7 @@ final class SystemMonitorViewModel {
                 cpu: snapshots.cpu,
                 memory: snapshots.memory
             )
+            applyBatteryMetrics(from: snapshots.battery)
         }
     }
 
@@ -377,10 +384,20 @@ final class SystemMonitorViewModel {
     }
 
     private func refreshBatteryMetrics() {
-        let battery = BatteryMonitor.snapshot()
-        guard batteryDisplay != battery.displayValue || isBatteryCharging != battery.isCharging else { return }
+        applyBatteryMetrics(from: BatteryMonitor.snapshot())
+    }
+
+    private func applyBatteryMetrics(from battery: BatterySnapshot) {
+        let nextChargingPowerDisplay = battery.chargingPowerDisplay
+        guard batteryDisplay != battery.displayValue
+            || batteryPercentage != battery.percentage
+            || isBatteryCharging != battery.isCharging
+            || chargingPowerDisplay != nextChargingPowerDisplay
+        else { return }
         batteryDisplay = battery.displayValue
+        batteryPercentage = battery.percentage
         isBatteryCharging = battery.isCharging
+        chargingPowerDisplay = nextChargingPowerDisplay
     }
 
     private func applyMediumMetrics(storage: StorageSnapshot) {

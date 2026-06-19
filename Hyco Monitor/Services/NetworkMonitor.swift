@@ -1,6 +1,7 @@
 import CoreWLAN
 import Darwin
 import Foundation
+import SystemConfiguration
 
 struct NetworkSnapshot {
     let isWifiConnected: Bool
@@ -58,11 +59,51 @@ enum NetworkMonitor {
         )
     }
 
-    nonisolated(unsafe) private static let wifiInterface = CWWiFiClient.shared().interface()
-
     nonisolated private static func isWiFiConnected() -> Bool {
-        guard let interface = wifiInterface, interface.powerOn() else { return false }
-        return interface.serviceActive()
+        guard let interface = CWWiFiClient.shared().interface(), interface.powerOn() else {
+            return false
+        }
+
+        // serviceActive() 仅表示 Wi-Fi 服务/射频已打开，不能代表已关联到某个 AP。
+        if interface.wlanChannel() != nil {
+            return true
+        }
+
+        if interface.activePHYMode() != .modeNone {
+            return true
+        }
+
+        if let ssid = interface.ssid(), !ssid.isEmpty {
+            return true
+        }
+
+        return wifiAssociatedViaDynamicStore(interfaceName: interface.interfaceName ?? "en0")
+    }
+
+    /// 通过 SystemConfiguration 读取 AirPort 状态；不依赖定位权限，CHANNEL 仅在已关联时出现。
+    nonisolated private static func wifiAssociatedViaDynamicStore(interfaceName: String) -> Bool {
+        guard let store = SCDynamicStoreCreate(nil, "com.hyco.monitor.network" as CFString, nil, nil) else {
+            return false
+        }
+
+        let key = "State:/Network/Interface/\(interfaceName)/AirPort" as CFString
+        guard let info = SCDynamicStoreCopyValue(store, key) as? [String: Any] else {
+            return false
+        }
+
+        if info["CHANNEL"] != nil {
+            return true
+        }
+
+        if let ssid = info["SSID_STR"] as? String, !ssid.isEmpty {
+            return true
+        }
+
+        if let ssidData = info["SSID"] as? Data, !ssidData.isEmpty {
+            return true
+        }
+
+        return false
     }
 
     nonisolated private static func readTotalBytes() -> (upload: UInt64, download: UInt64) {
