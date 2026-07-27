@@ -2,7 +2,7 @@
 //  Thyco_MonitorApp.swift
 //  Thyco Monitor
 //
-//  Created by 陈彦杭 on 2026/3/22.
+//  Created by Thyco.
 //
 
 import AppKit
