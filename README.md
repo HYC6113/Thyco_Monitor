@@ -1,6 +1,6 @@
-# Hyco Monitor
+# Thyco Monitor
 
-Hyco Monitor 是一款专为 macOS 设计的轻量级系统监控与实用工具面板。它常驻于菜单栏，提供无边框的浮动面板，让你可以随时查看系统状态并进行快捷操作。
+Thyco Monitor 是一款专为 macOS 设计的轻量级系统监控与实用工具面板。它常驻于菜单栏，提供无边框的浮动面板，让你可以随时查看系统状态并进行快捷操作。
 
 ## 🌟 核心功能
 
@@ -31,16 +31,16 @@ Hyco Monitor 是一款专为 macOS 设计的轻量级系统监控与实用工具
 
 1. 克隆本仓库到本地：
    ```bash
-   git clone https://github.com/HYC6113/Hyco_Monitor.git
+   git clone https://github.com/HYC6113/Thyco_Monitor.git
    ```
-2. 使用 Xcode 打开 `Hyco Monitor.xcodeproj`。
+2. 使用 Xcode 打开 `Thyco Monitor.xcodeproj`。
 3. 选择你的 Mac 作为目标设备（My Mac）。
 4. 点击 **Run** (Cmd + R) 编译并运行。
 5. 运行后，你会在屏幕顶部的菜单栏看到一个类似 Vision Pro 形状的图标，点击即可展开监控面板。
 
 ## 🛡️ 安全性与隐私
 
-Hyco Monitor 致力于保护用户的隐私与系统安全：
+Thyco Monitor 致力于保护用户的隐私与系统安全：
 - **无网络请求**：所有的系统数据监控均在本地完成，不会向任何外部服务器发送你的设备信息。
 - **只读监控**：大部分功能仅读取系统状态（如 SMC 传感器、网络接口、磁盘空间等）。
 - **安全的操作**：如“隐藏桌面”功能，仅通过修改 Finder 的 `CreateDesktop` 偏好设置实现，不会删除或移动你的任何文件。
@@ -52,7 +52,7 @@ Hyco Monitor 致力于保护用户的隐私与系统安全：
 
 ## 🤝 贡献
 
-欢迎提交 Issue 或 Pull Request 来帮助改进 Hyco Monitor！
+欢迎提交 Issue 或 Pull Request 来帮助改进 Thyco Monitor！
 
 ## 📄 许可证
 

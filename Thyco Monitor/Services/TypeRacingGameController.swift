@@ -11,7 +11,7 @@ final class TypeRacingGameController: NSObject {
     override init() {
         super.init()
         windowDelegate.onClose = { [weak self] in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.dismiss()
             }
         }

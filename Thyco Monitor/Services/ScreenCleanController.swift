@@ -67,6 +67,7 @@ final class ScreenCleanController {
         }
 
         for window in windows {
+            window.contentView = nil
             window.orderOut(nil)
         }
         windows.removeAll()

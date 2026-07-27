@@ -64,12 +64,8 @@ enum NetworkMonitor {
             return false
         }
 
-        // serviceActive() 仅表示 Wi-Fi 服务/射频已打开，不能代表已关联到某个 AP。
+        // 以 wlanChannel / 动态 store 的 CHANNEL 为准；不用 serviceActive() 或 activePHYMode()。
         if interface.wlanChannel() != nil {
-            return true
-        }
-
-        if interface.activePHYMode() != .modeNone {
             return true
         }
 
@@ -82,7 +78,7 @@ enum NetworkMonitor {
 
     /// 通过 SystemConfiguration 读取 AirPort 状态；不依赖定位权限，CHANNEL 仅在已关联时出现。
     nonisolated private static func wifiAssociatedViaDynamicStore(interfaceName: String) -> Bool {
-        guard let store = SCDynamicStoreCreate(nil, "com.hyco.monitor.network" as CFString, nil, nil) else {
+        guard let store = SCDynamicStoreCreate(nil, "com.thyco.monitor.network" as CFString, nil, nil) else {
             return false
         }
 

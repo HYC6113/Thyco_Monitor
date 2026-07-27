@@ -2,7 +2,7 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// 音频控制（移植自 Hyco_精简版 AudioManager 的 System Sound 能力）
+/// 音频控制（移植自 Thyco_精简版 AudioManager 的 System Sound 能力）
 @MainActor
 final class AudioManager {
     var onStateChanged: (() -> Void)?

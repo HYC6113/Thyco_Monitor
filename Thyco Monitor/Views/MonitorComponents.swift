@@ -7,13 +7,21 @@ struct CircleIconButton: View {
         case neutral
         case accent
         case theme(isDark: Bool)
+        /// 与主题切换按钮同款的毛玻璃底，图标为次级色
+        case chrome
     }
 
-    private static let diameter: CGFloat = 28
-    private static let iconPointSize: CGFloat = 11
+    enum Metrics {
+        case standard
+
+        var diameter: CGFloat { 28 }
+
+        var iconPointSize: CGFloat { 11 }
+    }
 
     let symbolName: String
     var style: Style = .neutral
+    var metrics: Metrics = .standard
     var accent: Color = Color(hex: 0x0A84FF)
     let action: () -> Void
 
@@ -24,9 +32,9 @@ struct CircleIconButton: View {
             switch style {
             case .neutral:
                 Image(systemName: symbolName)
-                    .font(.system(size: Self.iconPointSize, weight: .medium))
+                    .font(.system(size: metrics.iconPointSize, weight: .medium))
                     .foregroundStyle(colorScheme == .dark ? Color(hex: 0x8E8E93) : Color(hex: 0x86868B))
-                    .frame(width: Self.diameter, height: Self.diameter)
+                    .frame(width: metrics.diameter, height: metrics.diameter)
                     .background(colorScheme == .dark ? MonitorDarkPalette.neutralButtonFill : Color.black.opacity(0.05))
                     .clipShape(Circle())
                     .overlay(
@@ -37,10 +45,15 @@ struct CircleIconButton: View {
                 materialCircleIcon(foreground: accent, iconWeight: .heavy, gradientForeground: true)
             case .theme(let isDark):
                 materialCircleIcon(foreground: isDark ? Color(hex: 0xFFD60A) : Color(hex: 0xFF9500))
+            case .chrome:
+                materialCircleIcon(
+                    foreground: chromeIconColor(),
+                    iconWeight: .semibold
+                )
             }
         }
         .buttonStyle(.plain)
-        .frame(width: Self.diameter, height: Self.diameter)
+        .frame(width: metrics.diameter, height: metrics.diameter)
     }
 
     private func materialCircleIcon(
@@ -49,7 +62,7 @@ struct CircleIconButton: View {
         gradientForeground: Bool = false
     ) -> some View {
         Image(systemName: symbolName)
-            .font(.system(size: Self.iconPointSize, weight: iconWeight))
+            .font(.system(size: metrics.iconPointSize, weight: iconWeight))
             .foregroundStyle(
                 gradientForeground
                     ? AnyShapeStyle(
@@ -61,7 +74,7 @@ struct CircleIconButton: View {
                     )
                     : AnyShapeStyle(foreground)
             )
-            .frame(width: Self.diameter, height: Self.diameter)
+            .frame(width: metrics.diameter, height: metrics.diameter)
             .background {
                 Circle()
                     .fill(.ultraThinMaterial)
@@ -79,6 +92,10 @@ struct CircleIconButton: View {
                 Circle()
                     .strokeBorder(MonitorTheme.controlBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
             )
+    }
+
+    private func chromeIconColor() -> Color {
+        colorScheme == .dark ? Color(hex: 0x98989D) : Color(hex: 0x6E6E73)
     }
 }
 
@@ -329,6 +346,10 @@ struct StorageCleanerLaunchButton: View {
             .padding(.vertical, 6)
             .background(buttonBackground)
             .clipShape(MonitorTheme.controlShape)
+            .overlay(
+                MonitorTheme.controlShape
+                    .strokeBorder(MonitorTheme.subtleBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
+            )
         }
         .buttonStyle(.plain)
         .help(helpText)
@@ -456,6 +477,40 @@ struct ToggleRow: View {
     }
 }
 
+struct MemoryPressureIndicator: View {
+    let level: MemoryPressureLevel
+    let accessibilityLabel: String
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let diameter: CGFloat = 10
+
+    private var indicatorColor: Color {
+        switch level {
+        case .normal:
+            colorScheme == .dark ? Color(hex: 0x30D158) : Color(hex: 0x34C759)
+        case .warn:
+            colorScheme == .dark ? Color(hex: 0xFFD60A) : Color(hex: 0xFF9F0A)
+        case .critical:
+            colorScheme == .dark ? Color(hex: 0xFF453A) : Color(hex: 0xFF3B30)
+        }
+    }
+
+    var body: some View {
+        Circle()
+            .fill(indicatorColor)
+            .frame(width: Self.diameter, height: Self.diameter)
+            .overlay {
+                Circle()
+                    .strokeBorder(
+                        MonitorTheme.subtleBorderColor(for: colorScheme),
+                        lineWidth: MonitorTheme.borderLineWidth
+                    )
+            }
+            .accessibilityLabel(accessibilityLabel)
+    }
+}
+
 struct MemoryColumn: View {
     let title: String
     let titleTracking: CGFloat
@@ -552,11 +607,10 @@ extension View {
     }
 }
 
-struct LanguageSegmentedControl: View {
-    @Binding var selection: AppLanguage
+/// 语言切换中「已选中」分段的毛玻璃与填充样式
+struct LanguageSelectedSurface<S: InsettableShape>: View {
     let colorScheme: ColorScheme
-    let primaryText: Color
-    let tertiaryText: Color
+    var shape: S
 
     private var selectedBorderOpacity: Double {
         colorScheme == .dark ? 0.09 : 0.20
@@ -567,6 +621,55 @@ struct LanguageSegmentedControl: View {
             ? MonitorDarkPalette.languageSelectedFill
             : MonitorLightPalette.languageSelectedFill
     }
+
+    var body: some View {
+        shape
+            .fill(.ultraThinMaterial)
+            .overlay(shape.fill(selectedSurfaceFill))
+            .overlay(
+                shape.fill(colorScheme == .dark ? Color.white.opacity(0.03) : Color.white.opacity(0.05))
+            )
+            .overlay(
+                shape.strokeBorder(
+                    Color.white.opacity(selectedBorderOpacity),
+                    lineWidth: MonitorTheme.borderLineWidth
+                )
+            )
+    }
+}
+
+/// 底部设置按钮：外层轨道与语言切换一致，内层填充与选中语言分段一致
+struct FooterSettingsButton: View {
+    let isMenuOpen: Bool
+    let colorScheme: ColorScheme
+    let primaryText: Color
+    let action: () -> Void
+
+    private let contentSize: CGFloat = 20
+    private let iconPointSize: CGFloat = 12
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isMenuOpen ? "ellipsis.circle.fill" : "ellipsis.circle")
+                .font(.system(size: iconPointSize, weight: .semibold))
+                .foregroundStyle(primaryText)
+                .frame(width: contentSize, height: contentSize)
+                .background {
+                    LanguageSelectedSurface(colorScheme: colorScheme, shape: Circle())
+                }
+                .clipShape(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .languageTrackCapsuleChrome(colorScheme: colorScheme)
+    }
+}
+
+struct LanguageSegmentedControl: View {
+    @Binding var selection: AppLanguage
+    let colorScheme: ColorScheme
+    let primaryText: Color
+    let tertiaryText: Color
 
     var body: some View {
         HStack(spacing: 0) {
@@ -583,23 +686,7 @@ struct LanguageSegmentedControl: View {
                         .padding(.vertical, 4)
                         .background {
                             if selection == language {
-                                MonitorTheme.capsuleShape
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        MonitorTheme.capsuleShape
-                                            .fill(selectedSurfaceFill)
-                                    )
-                                    .overlay(
-                                        MonitorTheme.capsuleShape
-                                            .fill(colorScheme == .dark ? Color.white.opacity(0.03) : Color.white.opacity(0.05))
-                                    )
-                                    .overlay(
-                                        MonitorTheme.capsuleShape
-                                            .strokeBorder(
-                                                Color.white.opacity(selectedBorderOpacity),
-                                                lineWidth: MonitorTheme.borderLineWidth
-                                            )
-                                    )
+                                LanguageSelectedSurface(colorScheme: colorScheme, shape: MonitorTheme.capsuleShape)
                             }
                         }
                         .contentShape(MonitorTheme.capsuleShape)
@@ -611,7 +698,79 @@ struct LanguageSegmentedControl: View {
     }
 }
 
-// MARK: - Panel Components (Hyco 精简版风格)
+/// 悬浮菜单（设备下拉 / 设置浮层）统一的毛玻璃外框：
+/// 同材质 + 同底色 tint + 同描边 + 同投影，避免两处浮层观感漂移。
+struct FloatingMenuChrome: ViewModifier {
+    let colorScheme: ColorScheme
+
+    private var overlayFill: Color {
+        colorScheme == .dark
+            ? MonitorDarkPalette.cardBase.opacity(MonitorDarkPalette.menuListOverlayOpacity)
+            : MonitorLightPalette.panelBase.opacity(MonitorLightPalette.menuListOverlayOpacity)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                MonitorTheme.controlShape
+                    .fill(.thinMaterial)
+                    .overlay(
+                        MonitorTheme.controlShape.fill(overlayFill)
+                    )
+            }
+            .clipShape(MonitorTheme.controlShape)
+            .overlay {
+                MonitorTheme.controlShape
+                    .strokeBorder(
+                        MonitorTheme.menuListBorderGradient(for: colorScheme),
+                        lineWidth: MonitorTheme.borderLineWidth
+                    )
+            }
+            .compositingGroup()
+            .monitorMenuListShadow(colorScheme: colorScheme)
+    }
+}
+
+extension View {
+    func floatingMenuChrome(colorScheme: ColorScheme) -> some View {
+        modifier(FloatingMenuChrome(colorScheme: colorScheme))
+    }
+}
+
+// MARK: - Panel Components (Thyco 精简版风格)
+
+struct PanelHoverTooltipBubble: View {
+    let text: String
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(tooltipTextColor)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(tooltipBackground, in: MonitorTheme.minorShape)
+            .overlay(
+                MonitorTheme.minorShape
+                    .strokeBorder(tooltipBorder, lineWidth: MonitorTheme.borderLineWidth)
+            )
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.12), radius: 3, x: 0, y: 1)
+            .fixedSize()
+    }
+
+    private var tooltipBackground: Color {
+        colorScheme == .dark ? Color(white: 0.95) : Color(white: 0.18)
+    }
+
+    private var tooltipTextColor: Color {
+        colorScheme == .dark ? Color(white: 0.12) : Color.white
+    }
+
+    private var tooltipBorder: Color {
+        colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.12)
+    }
+}
 
 struct PanelCapsuleSlider: View {
     @Binding var value: Double
@@ -650,18 +809,7 @@ struct PanelCapsuleSlider: View {
                     .shadow(color: accent.opacity(0.22), radius: 2.5, x: 0, y: 1)
 
                 if showTooltip && (isHovering || isDragging) {
-                    Text("\(Int(value) > 0 ? "+" : "")\(Int(value))")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(tooltipTextColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(tooltipBackground, in: MonitorTheme.minorShape)
-                        .overlay(
-                            MonitorTheme.minorShape
-                                .strokeBorder(tooltipBorder, lineWidth: MonitorTheme.borderLineWidth)
-                        )
-                        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.12), radius: 3, x: 0, y: 1)
-                        .fixedSize()
+                    PanelHoverTooltipBubble(text: "\(Int(value) > 0 ? "+" : "")\(Int(value))")
                         .position(x: fillWidth, y: geometry.size.height / 2 - 16)
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                 }
@@ -688,17 +836,27 @@ struct PanelCapsuleSlider: View {
         }
         .frame(height: 20)
     }
+}
 
-    private var tooltipBackground: Color {
-        colorScheme == .dark ? Color(white: 0.95) : Color(white: 0.18)
-    }
+/// 与面板风格统一的设备选择下拉列表（替代系统 NSMenu 弹窗）
+struct PanelSettingsMenu: View {
+    @Binding var isOn: Bool
+    let title: String
+    let colorScheme: ColorScheme
+    let primaryText: Color
+    let border: Color
 
-    private var tooltipTextColor: Color {
-        colorScheme == .dark ? Color(white: 0.12) : Color.white
-    }
-
-    private var tooltipBorder: Color {
-        colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.12)
+    var body: some View {
+        ToggleRow(
+            title: title,
+            isOn: $isOn,
+            showDivider: false,
+            border: border,
+            titleColor: primaryText
+        )
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .floatingMenuChrome(colorScheme: colorScheme)
     }
 }
 
@@ -731,17 +889,7 @@ struct PanelMenuList: View {
                 rows
             }
         }
-        .background { listBackground }
-        .clipShape(MonitorTheme.controlShape)
-        .overlay {
-            MonitorTheme.controlShape
-                .strokeBorder(
-                    MonitorTheme.menuListBorderGradient(for: colorScheme),
-                    lineWidth: MonitorTheme.borderLineWidth
-                )
-        }
-        .compositingGroup()
-        .monitorMenuListShadow(colorScheme: colorScheme)
+        .floatingMenuChrome(colorScheme: colorScheme)
     }
 
     private var rows: some View {
@@ -774,12 +922,15 @@ struct PanelMenuList: View {
         .frame(height: rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            if isHovered {
-                MonitorTheme.minorShape
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.05))
-            } else if isSelected {
-                MonitorTheme.minorShape
-                    .fill(accent.opacity(colorScheme == .dark ? 0.16 : 0.10))
+            ZStack {
+                if isSelected {
+                    MonitorTheme.minorShape
+                        .fill(accent.opacity(colorScheme == .dark ? 0.16 : 0.10))
+                }
+                if isHovered {
+                    MonitorTheme.minorShape
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.05))
+                }
             }
         }
         .contentShape(Rectangle())
@@ -787,21 +938,6 @@ struct PanelMenuList: View {
             hoveredOption = hovering ? option : (hoveredOption == option ? nil : hoveredOption)
         }
         .onTapGesture { onSelect(option) }
-    }
-
-    private var listOverlayFill: Color {
-        colorScheme == .dark
-            ? MonitorDarkPalette.cardBase.opacity(MonitorDarkPalette.menuListOverlayOpacity)
-            : MonitorLightPalette.panelBase.opacity(MonitorLightPalette.menuListOverlayOpacity)
-    }
-
-    private var listBackground: some View {
-        MonitorTheme.controlShape
-            .fill(.thinMaterial)
-            .overlay(
-                MonitorTheme.controlShape
-                    .fill(listOverlayFill)
-            )
     }
 }
 

@@ -1,13 +1,13 @@
 //
-//  Hyco_MonitorUITestsLaunchTests.swift
-//  Hyco MonitorUITests
+//  Thyco_MonitorUITestsLaunchTests.swift
+//  Thyco MonitorUITests
 //
 //  Created by 陈彦杭 on 2026/3/22.
 //
 
 import XCTest
 
-final class Hyco_MonitorUITestsLaunchTests: XCTestCase {
+final class Thyco_MonitorUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true
