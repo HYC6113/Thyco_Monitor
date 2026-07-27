@@ -80,11 +80,15 @@ final class SystemMonitorViewModel {
     var cpuLoadDisplay = "0"
     var hideDesktop = false
     var cleanMode = false
+    var launchAtLoginEnabled = false
     var appLanguage: AppLanguage = .chs
+    /// 每次面板展示递增，供界面重置临时弹层状态。
+    var panelOpenGeneration = 0
 
     // Memory
     var memoryOverview: [(MemoryMetricKey, String, Bool)] = []
     var memoryBreakdown: [(MemoryMetricKey, String, Bool)] = []
+    var memoryPressureLevel: MemoryPressureLevel = .normal
 
     // Audio
     var outputDevices: [AudioDevice] = []
@@ -280,6 +284,7 @@ final class SystemMonitorViewModel {
 
         refreshStorageCleanerApp()
         volumeBeforeMute = nil
+        launchAtLoginEnabled = LaunchAtLoginService.isEnabled
     }
 
     func setAppLanguage(_ language: AppLanguage) {
@@ -291,6 +296,24 @@ final class SystemMonitorViewModel {
         let next: MonitorAppearance = isCurrentlyDark ? .light : .dark
         MonitorPreferencesService.saveAppearance(next)
         MonitorPreferencesService.applyAppearance(next)
+    }
+
+    func willPresentPanel() {
+        panelOpenGeneration += 1
+        launchAtLoginEnabled = LaunchAtLoginService.isEnabled
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        guard enabled != LaunchAtLoginService.isEnabled else {
+            launchAtLoginEnabled = enabled
+            return
+        }
+        do {
+            try LaunchAtLoginService.setEnabled(enabled)
+        } catch {
+            // 用户未在系统设置中授权时 register 可能失败，回读真实状态。
+        }
+        launchAtLoginEnabled = LaunchAtLoginService.isEnabled
     }
 
     private func runFastTickIfNeeded() {
@@ -380,6 +403,9 @@ final class SystemMonitorViewModel {
         ]
         if !memoryMetricsEqual(memoryBreakdown, breakdown) {
             memoryBreakdown = breakdown
+        }
+        if memoryPressureLevel != memory.pressureLevel {
+            memoryPressureLevel = memory.pressureLevel
         }
     }
 

@@ -12,37 +12,37 @@
 			containerPortal = 3715BE3F2F700B830016379D /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 3715BE462F700B830016379D;
-			remoteInfo = "Hyco Monitor";
+			remoteInfo = "Thyco Monitor";
 		};
 		3715BE612F700B830016379D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 3715BE3F2F700B830016379D /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 3715BE462F700B830016379D;
-			remoteInfo = "Hyco Monitor";
+			remoteInfo = "Thyco Monitor";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		3715BE472F700B830016379D /* Hyco Monitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Hyco Monitor.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		3715BE562F700B830016379D /* Hyco MonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Hyco MonitorTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		3715BE602F700B830016379D /* Hyco MonitorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Hyco MonitorUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3715BE472F700B830016379D /* Thyco Monitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Thyco Monitor.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3715BE562F700B830016379D /* Thyco MonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Thyco MonitorTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3715BE602F700B830016379D /* Thyco MonitorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Thyco MonitorUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3715BE492F700B830016379D /* Hyco Monitor */ = {
+		3715BE492F700B830016379D /* Thyco Monitor */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Hyco Monitor";
+			path = "Thyco Monitor";
 			sourceTree = "<group>";
 		};
-		3715BE592F700B830016379D /* Hyco MonitorTests */ = {
+		3715BE592F700B830016379D /* Thyco MonitorTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Hyco MonitorTests";
+			path = "Thyco MonitorTests";
 			sourceTree = "<group>";
 		};
-		3715BE632F700B830016379D /* Hyco MonitorUITests */ = {
+		3715BE632F700B830016379D /* Thyco MonitorUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Hyco MonitorUITests";
+			path = "Thyco MonitorUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,9 +75,9 @@
 		3715BE3E2F700B830016379D = {
 			isa = PBXGroup;
 			children = (
-				3715BE492F700B830016379D /* Hyco Monitor */,
-				3715BE592F700B830016379D /* Hyco MonitorTests */,
-				3715BE632F700B830016379D /* Hyco MonitorUITests */,
+				3715BE492F700B830016379D /* Thyco Monitor */,
+				3715BE592F700B830016379D /* Thyco MonitorTests */,
+				3715BE632F700B830016379D /* Thyco MonitorUITests */,
 				3715BE482F700B830016379D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,9 +85,9 @@
 		3715BE482F700B830016379D /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3715BE472F700B830016379D /* Hyco Monitor.app */,
-				3715BE562F700B830016379D /* Hyco MonitorTests.xctest */,
-				3715BE602F700B830016379D /* Hyco MonitorUITests.xctest */,
+				3715BE472F700B830016379D /* Thyco Monitor.app */,
+				3715BE562F700B830016379D /* Thyco MonitorTests.xctest */,
+				3715BE602F700B830016379D /* Thyco MonitorUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,9 +95,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3715BE462F700B830016379D /* Hyco Monitor */ = {
+		3715BE462F700B830016379D /* Thyco Monitor */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3715BE6A2F700B830016379D /* Build configuration list for PBXNativeTarget "Hyco Monitor" */;
+			buildConfigurationList = 3715BE6A2F700B830016379D /* Build configuration list for PBXNativeTarget "Thyco Monitor" */;
 			buildPhases = (
 				3715BE432F700B830016379D /* Sources */,
 				3715BE442F700B830016379D /* Frameworks */,
@@ -108,18 +108,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3715BE492F700B830016379D /* Hyco Monitor */,
+				3715BE492F700B830016379D /* Thyco Monitor */,
 			);
-			name = "Hyco Monitor";
+			name = "Thyco Monitor";
 			packageProductDependencies = (
 			);
-			productName = "Hyco Monitor";
-			productReference = 3715BE472F700B830016379D /* Hyco Monitor.app */;
+			productName = "Thyco Monitor";
+			productReference = 3715BE472F700B830016379D /* Thyco Monitor.app */;
 			productType = "com.apple.product-type.application";
 		};
-		3715BE552F700B830016379D /* Hyco MonitorTests */ = {
+		3715BE552F700B830016379D /* Thyco MonitorTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3715BE6D2F700B830016379D /* Build configuration list for PBXNativeTarget "Hyco MonitorTests" */;
+			buildConfigurationList = 3715BE6D2F700B830016379D /* Build configuration list for PBXNativeTarget "Thyco MonitorTests" */;
 			buildPhases = (
 				3715BE522F700B830016379D /* Sources */,
 				3715BE532F700B830016379D /* Frameworks */,
@@ -131,18 +131,18 @@
 				3715BE582F700B830016379D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3715BE592F700B830016379D /* Hyco MonitorTests */,
+				3715BE592F700B830016379D /* Thyco MonitorTests */,
 			);
-			name = "Hyco MonitorTests";
+			name = "Thyco MonitorTests";
 			packageProductDependencies = (
 			);
-			productName = "Hyco MonitorTests";
-			productReference = 3715BE562F700B830016379D /* Hyco MonitorTests.xctest */;
+			productName = "Thyco MonitorTests";
+			productReference = 3715BE562F700B830016379D /* Thyco MonitorTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		3715BE5F2F700B830016379D /* Hyco MonitorUITests */ = {
+		3715BE5F2F700B830016379D /* Thyco MonitorUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3715BE702F700B830016379D /* Build configuration list for PBXNativeTarget "Hyco MonitorUITests" */;
+			buildConfigurationList = 3715BE702F700B830016379D /* Build configuration list for PBXNativeTarget "Thyco MonitorUITests" */;
 			buildPhases = (
 				3715BE5C2F700B830016379D /* Sources */,
 				3715BE5D2F700B830016379D /* Frameworks */,
@@ -154,13 +154,13 @@
 				3715BE622F700B830016379D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3715BE632F700B830016379D /* Hyco MonitorUITests */,
+				3715BE632F700B830016379D /* Thyco MonitorUITests */,
 			);
-			name = "Hyco MonitorUITests";
+			name = "Thyco MonitorUITests";
 			packageProductDependencies = (
 			);
-			productName = "Hyco MonitorUITests";
-			productReference = 3715BE602F700B830016379D /* Hyco MonitorUITests.xctest */;
+			productName = "Thyco MonitorUITests";
+			productReference = 3715BE602F700B830016379D /* Thyco MonitorUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 3715BE422F700B830016379D /* Build configuration list for PBXProject "Hyco Monitor" */;
+			buildConfigurationList = 3715BE422F700B830016379D /* Build configuration list for PBXProject "Thyco Monitor" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -200,9 +200,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				3715BE462F700B830016379D /* Hyco Monitor */,
-				3715BE552F700B830016379D /* Hyco MonitorTests */,
-				3715BE5F2F700B830016379D /* Hyco MonitorUITests */,
+				3715BE462F700B830016379D /* Thyco Monitor */,
+				3715BE552F700B830016379D /* Thyco MonitorTests */,
+				3715BE5F2F700B830016379D /* Thyco MonitorUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -258,12 +258,12 @@
 /* Begin PBXTargetDependency section */
 		3715BE582F700B830016379D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 3715BE462F700B830016379D /* Hyco Monitor */;
+			target = 3715BE462F700B830016379D /* Thyco Monitor */;
 			targetProxy = 3715BE572F700B830016379D /* PBXContainerItemProxy */;
 		};
 		3715BE622F700B830016379D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 3715BE462F700B830016379D /* Hyco Monitor */;
+			target = 3715BE462F700B830016379D /* Thyco Monitor */;
 			targetProxy = 3715BE612F700B830016379D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -397,12 +397,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = "Hyco Monitor/Hyco Monitor.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Thyco Monitor/Thyco Monitor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
-
+				DEVELOPMENT_TEAM = VU2Z8P5SX9;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -417,7 +417,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.5.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -425,7 +425,7 @@
 					"-framework",
 					AudioToolbox,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Hyco-Monitor";
+				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Thyco-Monitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -443,12 +443,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = "Hyco Monitor/Hyco Monitor.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Thyco Monitor/Thyco Monitor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
-
+				DEVELOPMENT_TEAM = VU2Z8P5SX9;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -463,7 +463,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.5.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -471,7 +471,7 @@
 					"-framework",
 					AudioToolbox,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Hyco-Monitor";
+				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Thyco-Monitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -493,14 +493,14 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Hyco-MonitorTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Thyco-MonitorTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hyco Monitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Hyco Monitor";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Thyco Monitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Thyco Monitor";
 			};
 			name = Debug;
 		};
@@ -514,14 +514,14 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Hyco-MonitorTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Thyco-MonitorTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hyco Monitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Hyco Monitor";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Thyco Monitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Thyco Monitor";
 			};
 			name = Release;
 		};
@@ -533,14 +533,14 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Hyco-MonitorUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Thyco-MonitorUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Hyco Monitor";
+				TEST_TARGET_NAME = "Thyco Monitor";
 			};
 			name = Debug;
 		};
@@ -552,21 +552,21 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Hyco-MonitorUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "Personal.Thyco-MonitorUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Hyco Monitor";
+				TEST_TARGET_NAME = "Thyco Monitor";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		3715BE422F700B830016379D /* Build configuration list for PBXProject "Hyco Monitor" */ = {
+		3715BE422F700B830016379D /* Build configuration list for PBXProject "Thyco Monitor" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3715BE682F700B830016379D /* Debug */,
@@ -575,7 +575,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3715BE6A2F700B830016379D /* Build configuration list for PBXNativeTarget "Hyco Monitor" */ = {
+		3715BE6A2F700B830016379D /* Build configuration list for PBXNativeTarget "Thyco Monitor" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3715BE6B2F700B830016379D /* Debug */,
@@ -584,7 +584,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3715BE6D2F700B830016379D /* Build configuration list for PBXNativeTarget "Hyco MonitorTests" */ = {
+		3715BE6D2F700B830016379D /* Build configuration list for PBXNativeTarget "Thyco MonitorTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3715BE6E2F700B830016379D /* Debug */,
@@ -593,7 +593,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3715BE702F700B830016379D /* Build configuration list for PBXNativeTarget "Hyco MonitorUITests" */ = {
+		3715BE702F700B830016379D /* Build configuration list for PBXNativeTarget "Thyco MonitorUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3715BE712F700B830016379D /* Debug */,

@@ -69,6 +69,15 @@ struct MonitorStrings {
     var noAvailableDevices: String { t("无可用设备", "No Devices") }
     var noOutputDevice: String { t("无输出设备", "No Output") }
     var noInputDevice: String { t("无输入设备", "No Input") }
+    var launchAtLogin: String { t("开机自启动", "Launch at Login") }
+
+    func memoryPressureLabel(for level: MemoryPressureLevel) -> String {
+        switch level {
+        case .normal: t("内存压力：正常", "Memory Pressure: Normal")
+        case .warn: t("内存压力：偏高", "Memory Pressure: High")
+        case .critical: t("内存压力：严重", "Memory Pressure: Critical")
+        }
+    }
 
     func memoryLabel(for key: MemoryMetricKey) -> String {
         switch key {

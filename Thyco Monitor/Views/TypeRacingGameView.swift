@@ -89,11 +89,7 @@ struct TypeRacingGameView: View {
 
     private var panelChrome: some View {
         RoundedRectangle(cornerRadius: TypeRacingWindowLayout.panelCornerRadius, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: TypeRacingWindowLayout.panelCornerRadius, style: .continuous)
-                    .fill((isDark ? TypeRacingPixelStyle.terminalBGDark : TypeRacingPixelStyle.terminalBG).opacity(0.9))
-            )
+            .fill(isDark ? TypeRacingPixelStyle.terminalBGDark : TypeRacingPixelStyle.terminalBG)
             .overlay(
                 RoundedRectangle(cornerRadius: TypeRacingWindowLayout.panelCornerRadius, style: .continuous)
                     .strokeBorder(

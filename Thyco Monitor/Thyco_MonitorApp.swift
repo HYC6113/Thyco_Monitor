@@ -1,6 +1,6 @@
 //
-//  Hyco_MonitorApp.swift
-//  Hyco Monitor
+//  Thyco_MonitorApp.swift
+//  Thyco Monitor
 //
 //  Created by 陈彦杭 on 2026/3/22.
 //
@@ -15,7 +15,7 @@ enum PreviewEnvironment {
 }
 
 @main
-struct Hyco_MonitorApp: App {
+struct Thyco_MonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -204,7 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let canvasHeight: CGFloat = 18
         let horizontalPadding: CGFloat = 1.5
         let configuration = NSImage.SymbolConfiguration(pointSize: symbolPointSize, weight: .heavy)
-        guard let symbol = NSImage(systemSymbolName: "visionpro", accessibilityDescription: "Hyco Monitor")?
+        guard let symbol = NSImage(systemSymbolName: "visionpro", accessibilityDescription: "Thyco Monitor")?
             .withSymbolConfiguration(configuration) else {
             return nil
         }
@@ -245,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         cancelPanelCloseIfNeeded()
 
         // 仅在面板可见期间轮询系统指标，隐藏时彻底停掉以降低功耗。
+        monitorViewModel.willPresentPanel()
         monitorViewModel.startMonitoring()
 
         panel.setFrameOrigin(origin)

@@ -3,7 +3,7 @@ import Foundation
 final class MonitorUpdateScheduler {
     private var fastTimer: DispatchSourceTimer?
     private var mediumTimer: DispatchSourceTimer?
-    private let queue = DispatchQueue(label: "com.hyco.monitor.scheduler", qos: .utility)
+    private let queue = DispatchQueue(label: "com.thyco.monitor.scheduler", qos: .utility)
 
     var onFastTick: (() -> Void)?
     var onMediumTick: (() -> Void)?

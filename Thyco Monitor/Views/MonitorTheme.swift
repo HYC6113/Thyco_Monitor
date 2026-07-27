@@ -11,16 +11,16 @@ enum MonitorPanelLayout {
     static var panelWidth: CGFloat { (designWidth * scale).rounded(.toNearestOrAwayFromZero) }
     static var panelHeight: CGFloat { (designHeight * scale).rounded(.toNearestOrAwayFromZero) }
 
-    static let contentPadding: CGFloat = 18
-    static var contentAreaWidth: CGFloat { designWidth - (contentPadding * 2) }
-    static let horizontalPadding: CGFloat = contentPadding
-    static let verticalTopPadding: CGFloat = contentPadding
-    static let verticalBottomPadding: CGFloat = contentPadding
+    static var contentInsets: EdgeInsets { CardRhythm.cardInset }
+    static var contentAreaWidth: CGFloat {
+        designWidth - contentInsets.leading - contentInsets.trailing
+    }
 
     static let cardSpacing: CGFloat = 10
 
-    static let cardWidth: CGFloat =
-        (designWidth - (contentPadding * 2) - cardSpacing) / 2
+    static var cardWidth: CGFloat {
+        (contentAreaWidth - cardSpacing) / 2
+    }
     static let topGridCardHeight: CGFloat = 182
     static let bottomGridCardHeight: CGFloat = 182
     /// 声音板块内容高度（两行控件 + 分隔线 + 区块间距）
@@ -51,7 +51,9 @@ enum MonitorPanelLayout {
             + (cardSpacing * 2)
     }
 
-    static var designHeight: CGFloat { contentHeight + (contentPadding * 2) }
+    static var designHeight: CGFloat {
+        contentHeight + contentInsets.top + contentInsets.bottom
+    }
 }
 
 /// 卡片内部排版节奏
@@ -63,17 +65,16 @@ enum CardRhythm {
     static let labelGap: CGFloat = 4
     static let memoryHeaderBottomSpacing: CGFloat = titleGap
     static let memoryRowMinHeight: CGFloat = 31
-    static let cardInset = EdgeInsets(top: 12, leading: 13, bottom: 13, trailing: 13)
+    static let cardInset = EdgeInsets(top: 13, leading: 13, bottom: 13, trailing: 13)
 }
 
-/// 全界面统一视觉参数（对齐 Hyco 精简版 Sound 板块）
+/// 全界面统一视觉参数（对齐 Thyco 精简版 Sound 板块）
 enum MonitorTheme {
     static let borderLineWidth: CGFloat = 0.5
 
     // 设计稿坐标系连续圆角（随 ContentView scaleEffect 等比缩放）
-    // 统一为约 0.64 的等比级数：22 → 14 → 9 → 6，
-    // 保证 panel / card / control / minor 四级圆角的视觉节奏一致。
-    static let panelCornerRadius: CGFloat = 22
+    // 等比级数：20 → 14 → 9 → 6
+    static let panelCornerRadius: CGFloat = 20
     static let cardCornerRadius: CGFloat = 14
     static let controlCornerRadius: CGFloat = 9
     static let minorCornerRadius: CGFloat = 6
@@ -97,8 +98,8 @@ enum MonitorTheme {
     static func panelBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.08), Color.white.opacity(0.025)]
-                : [Color.white.opacity(0.38), Color.white.opacity(0.12)],
+                ? [Color.white.opacity(0.07), Color.white.opacity(0.02)]
+                : [Color.white.opacity(0.34), Color.white.opacity(0.10)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -107,8 +108,8 @@ enum MonitorTheme {
     static func cardBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.09), Color.white.opacity(0.025)]
-                : [Color.white.opacity(0.34), Color.white.opacity(0.10)],
+                ? [Color.white.opacity(0.08), Color.white.opacity(0.02)]
+                : [Color.white.opacity(0.30), Color.white.opacity(0.08)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -118,8 +119,8 @@ enum MonitorTheme {
     static func menuListBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.18), Color.white.opacity(0.07)]
-                : [Color.white.opacity(0.62), Color.black.opacity(0.10)],
+                ? [Color.white.opacity(0.16), Color.white.opacity(0.06)]
+                : [Color.white.opacity(0.56), Color.black.opacity(0.09)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -189,37 +190,36 @@ enum MonitorLightPalette {
 extension View {
     func monitorControlShadow(colorScheme: ColorScheme) -> some View {
         shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.12 : 0.028),
-            radius: colorScheme == .dark ? 3 : 2,
+            color: Color.black.opacity(colorScheme == .dark ? 0.10 : 0.024),
+            radius: colorScheme == .dark ? 2.5 : 1.5,
             x: 0,
-            y: colorScheme == .dark ? 1 : 0.5
+            y: colorScheme == .dark ? 0.8 : 0.4
         )
     }
 
-    /// 卡片悬浮阴影：加深以增强悬浮感，但模糊半径 + 垂直偏移的总投射距离
-    /// 控制在 ~5pt 以内（< 10pt 卡片间距的一半），确保相邻卡片阴影互不重叠。
+    /// 卡片悬浮阴影：边距收紧后略收敛，避免贴边时阴影显得过重
     func monitorCardShadow(colorScheme: ColorScheme) -> some View {
         shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.26 : 0.09),
-            radius: colorScheme == .dark ? 3 : 3.5,
+            color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.075),
+            radius: colorScheme == .dark ? 2.5 : 3,
             x: 0,
-            y: colorScheme == .dark ? 2 : 1.5
+            y: colorScheme == .dark ? 1.5 : 1.2
         )
     }
 
-    /// 浮层下拉列表阴影：双层投影，增强悬浮感与背景分离
+    /// 浮层下拉列表阴影：与紧凑布局匹配的轻量双层投影
     func monitorMenuListShadow(colorScheme: ColorScheme) -> some View {
         shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.44 : 0.16),
-            radius: colorScheme == .dark ? 14 : 12,
+            color: Color.black.opacity(colorScheme == .dark ? 0.38 : 0.13),
+            radius: colorScheme == .dark ? 12 : 10,
             x: 0,
-            y: colorScheme == .dark ? 6 : 5
+            y: colorScheme == .dark ? 5 : 4
         )
         .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.20 : 0.07),
-            radius: 2,
+            color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.06),
+            radius: 1.5,
             x: 0,
-            y: 1
+            y: 0.8
         )
     }
 

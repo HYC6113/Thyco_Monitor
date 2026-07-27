@@ -1,13 +1,13 @@
 //
-//  Hyco_MonitorUITests.swift
-//  Hyco MonitorUITests
+//  Thyco_MonitorUITests.swift
+//  Thyco MonitorUITests
 //
 //  Created by 陈彦杭 on 2026/3/22.
 //
 
 import XCTest
 
-final class Hyco_MonitorUITests: XCTestCase {
+final class Thyco_MonitorUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

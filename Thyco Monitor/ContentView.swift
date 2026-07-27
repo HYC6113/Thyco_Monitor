@@ -17,10 +17,26 @@ private struct PickerAnchorPreferenceKey: PreferenceKey {
     }
 }
 
+private enum SettingsAnchor: Hashable {
+    case settingsButton
+}
+
+private struct SettingsAnchorPreferenceKey: PreferenceKey {
+    static let defaultValue: [SettingsAnchor: Anchor<CGRect>] = [:]
+
+    static func reduce(
+        value: inout [SettingsAnchor: Anchor<CGRect>],
+        nextValue: () -> [SettingsAnchor: Anchor<CGRect>]
+    ) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 struct ContentView: View {
     var viewModel: SystemMonitorViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var openDevicePicker: SoundDeviceKind?
+    @State private var isSettingsMenuOpen = false
 
     private var strings: MonitorStrings {
         MonitorStrings(language: viewModel.appLanguage)
@@ -52,7 +68,7 @@ struct ContentView: View {
                     )
                 footerSection
             }
-            .padding(MonitorPanelLayout.contentPadding)
+            .padding(MonitorPanelLayout.contentInsets)
             .frame(
                 width: MonitorPanelLayout.designWidth,
                 height: MonitorPanelLayout.designHeight,
@@ -62,6 +78,13 @@ struct ContentView: View {
         .frame(width: MonitorPanelLayout.designWidth, height: MonitorPanelLayout.designHeight)
         .overlayPreferenceValue(PickerAnchorPreferenceKey.self) { anchors in
             deviceDropdownOverlay(anchors: anchors)
+        }
+        .overlayPreferenceValue(SettingsAnchorPreferenceKey.self) { anchors in
+            settingsMenuOverlay(anchors: anchors)
+        }
+        .onChange(of: viewModel.panelOpenGeneration) { _, _ in
+            isSettingsMenuOpen = false
+            openDevicePicker = nil
         }
         .clipShape(MonitorTheme.panelShape)
         .scaleEffect(MonitorPanelLayout.scale, anchor: .topLeading)
@@ -90,14 +113,31 @@ private extension ContentView {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
 
-            CircleIconButton(
-                symbolName: colorScheme == .dark ? "moon.fill" : "sun.max.fill",
-                style: .theme(isDark: colorScheme == .dark)
-            ) {
-                viewModel.toggleAppearance(isCurrentlyDark: colorScheme == .dark)
-            }
+            headerThemeButton
         }
         .frame(height: MonitorPanelLayout.headerHeight)
+    }
+
+    var headerThemeButton: some View {
+        CircleIconButton(
+            symbolName: colorScheme == .dark ? "moon.fill" : "sun.max.fill",
+            style: .theme(isDark: colorScheme == .dark)
+        ) {
+            isSettingsMenuOpen = false
+            viewModel.toggleAppearance(isCurrentlyDark: colorScheme == .dark)
+        }
+    }
+
+    var footerSettingsButton: some View {
+        FooterSettingsButton(
+            isMenuOpen: isSettingsMenuOpen,
+            colorScheme: colorScheme,
+            primaryText: primaryText
+        ) {
+            openDevicePicker = nil
+            isSettingsMenuOpen.toggle()
+        }
+        .anchorPreference(key: SettingsAnchorPreferenceKey.self, value: .bounds) { [.settingsButton: $0] }
     }
 
     var upperMonitorCardGrid: some View {
@@ -181,6 +221,10 @@ private extension ContentView {
                         .padding(.vertical, 6)
                         .background(controlBackground)
                     .clipShape(MonitorTheme.controlShape)
+                    .overlay(
+                        MonitorTheme.controlShape
+                            .strokeBorder(MonitorTheme.subtleBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
+                    )
                     .contentShape(MonitorTheme.controlShape)
                     }
                     .buttonStyle(.plain)
@@ -328,6 +372,10 @@ private extension ContentView {
                     .padding(.vertical, 2)
                     .background(controlBackground)
                     .clipShape(MonitorTheme.controlShape)
+                    .overlay(
+                        MonitorTheme.controlShape
+                            .strokeBorder(MonitorTheme.subtleBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
+                    )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .overlay(alignment: .bottomLeading) {
@@ -371,6 +419,12 @@ private extension ContentView {
                 )
             }
             .frame(maxHeight: .infinity, alignment: .topLeading)
+            .overlay(alignment: .bottomTrailing) {
+                MemoryPressureIndicator(
+                    level: viewModel.memoryPressureLevel,
+                    accessibilityLabel: strings.memoryPressureLabel(for: viewModel.memoryPressureLevel)
+                )
+            }
         }
     }
 
@@ -414,7 +468,7 @@ private extension ContentView {
     }
 
     var footerSection: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 8) {
             LanguageSegmentedControl(
                 selection: Binding(
                     get: { viewModel.appLanguage },
@@ -424,6 +478,8 @@ private extension ContentView {
                 primaryText: primaryText,
                 tertiaryText: tertiaryText
             )
+
+            footerSettingsButton
 
             Spacer(minLength: 0)
 
@@ -491,6 +547,13 @@ private extension ContentView {
         )
     }
 
+    var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.launchAtLoginEnabled },
+            set: { viewModel.setLaunchAtLogin($0) }
+        )
+    }
+
     var outputDeviceBinding: Binding<String> {
         Binding(
             get: {
@@ -543,6 +606,7 @@ private extension ContentView {
 
             Button {
                 guard !isEmpty else { return }
+                isSettingsMenuOpen = false
                 openDevicePicker = isOpen ? nil : kind
             } label: {
                 HStack(spacing: 6) {
@@ -584,7 +648,8 @@ private extension ContentView {
                 let options = kind == .output ? outputDeviceOptionNames : inputDeviceOptionNames
                 let selection = kind == .output ? outputDeviceBinding : inputDeviceBinding
                 let listHeight = dropdownListHeight(optionCount: options.count)
-                let listY = fieldRect.minY - listHeight - 4
+                let gap: CGFloat = 4
+                let listY = max(gap, fieldRect.minY - listHeight - gap)
 
                 ZStack(alignment: .topLeading) {
                     Color.clear
@@ -606,6 +671,36 @@ private extension ContentView {
                     )
                     .frame(width: fieldRect.width)
                     .offset(x: fieldRect.minX, y: listY)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    func settingsMenuOverlay(anchors: [SettingsAnchor: Anchor<CGRect>]) -> some View {
+        GeometryReader { proxy in
+            if isSettingsMenuOpen, let anchor = anchors[.settingsButton] {
+                let buttonRect = proxy[anchor]
+                let menuWidth: CGFloat = 210
+                let menuHeight: CGFloat = 44
+                let menuX = buttonRect.minX
+                let menuY = buttonRect.minY - menuHeight - 4
+
+                ZStack(alignment: .topLeading) {
+                    Color.clear
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .contentShape(Rectangle())
+                        .onTapGesture { isSettingsMenuOpen = false }
+
+                    PanelSettingsMenu(
+                        isOn: launchAtLoginBinding,
+                        title: strings.launchAtLogin,
+                        colorScheme: colorScheme,
+                        primaryText: primaryText,
+                        border: cardBorder
+                    )
+                    .frame(width: menuWidth, height: menuHeight)
+                    .offset(x: menuX, y: menuY)
                 }
             }
         }
