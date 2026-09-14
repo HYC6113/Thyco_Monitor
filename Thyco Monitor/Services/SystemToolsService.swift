@@ -4,53 +4,25 @@ import Foundation
 /// 隐藏/显示桌面图标，实现方式与 One Switch、OnlySwitch 一致：
 /// 修改 Finder 的 `CreateDesktop` 偏好并重启 Finder，桌面只保留壁纸，文件仍位于 ~/Desktop。
 enum SystemToolsService {
-
+    /// 进程内读取 Finder 偏好；该值由外部 `defaults write` 改写，读取前先丢弃本进程缓存。
+    /// `defaults write … 0/1` 存的是字符串，One Switch 等工具用 `-bool` 存布尔，两种都要认。
     nonisolated static func isDesktopHidden() -> Bool {
-        guard let output = readDefaults(domain: "com.apple.finder", key: "CreateDesktop") else {
-            // 未设置该键时 Finder 默认显示桌面图标
-            return false
-        }
-        return output == "0"
-    }
+        let domain = "com.apple.finder" as CFString
+        CFPreferencesAppSynchronize(domain)
 
-    /// 打开系统设置中的网络（优先跳转 Wi-Fi 页面）。
-    nonisolated static func openNetworkSettings() {
-        let candidates = [
-            "x-apple.systempreferences:com.apple.Network-Settings.extension?Wi-Fi",
-            "x-apple.systempreferences:com.apple.Network-Settings.extension",
-            "x-apple.systempreferences:com.apple.preference.network"
-        ]
-
-        DispatchQueue.main.async {
-            for candidate in candidates {
-                guard let url = URL(string: candidate) else { continue }
-                if NSWorkspace.shared.open(url) { return }
-            }
-        }
-    }
-
-    /// 打开系统设置中的存储空间。
-    nonisolated static func openStorageSettings() {
-        let candidates = [
-            "x-apple.systempreferences:com.apple.settings.Storage",
-            "x-apple.systempreferences:com.apple.StorageManagement-Settings.extension",
-            "x-apple.systempreferences:com.apple.preference.storage"
-        ]
-
-        DispatchQueue.main.async {
-            for candidate in candidates {
-                guard let url = URL(string: candidate) else { continue }
-                if NSWorkspace.shared.open(url) { return }
-            }
+        switch CFPreferencesCopyAppValue("CreateDesktop" as CFString, domain) {
+        case let text as String: return text == "0" || text == "false"
+        case let number as NSNumber: return !number.boolValue
+        // 未设置该键时 Finder 默认显示桌面图标
+        default: return false
         }
     }
 
     @discardableResult
     nonisolated static func setDesktopHidden(_ hidden: Bool) -> Bool {
-        let value = hidden ? "0" : "1"
         guard runCommand(
             executable: "/usr/bin/defaults",
-            arguments: ["write", "com.apple.finder", "CreateDesktop", value]
+            arguments: ["write", "com.apple.finder", "CreateDesktop", hidden ? "0" : "1"]
         ) else {
             return false
         }
@@ -58,30 +30,36 @@ enum SystemToolsService {
         return runCommand(executable: "/usr/bin/killall", arguments: ["Finder"])
     }
 
-    nonisolated private static func readDefaults(domain: String, key: String) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        process.arguments = ["read", domain, key]
+    /// 打开系统设置中的网络（优先跳转 Wi-Fi 页面）。
+    nonisolated static func openNetworkSettings() {
+        openSettings([
+            "x-apple.systempreferences:com.apple.Network-Settings.extension?Wi-Fi",
+            "x-apple.systempreferences:com.apple.Network-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.network"
+        ])
+    }
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
+    /// 打开系统设置中的存储空间。
+    nonisolated static func openStorageSettings() {
+        openSettings([
+            "x-apple.systempreferences:com.apple.settings.Storage",
+            "x-apple.systempreferences:com.apple.StorageManagement-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.storage"
+        ])
+    }
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            return nil
+    /// 依次尝试候选 URL，命中第一个可打开的设置面板。
+    nonisolated private static func openSettings(_ candidates: [String]) {
+        DispatchQueue.main.async {
+            for candidate in candidates {
+                guard let url = URL(string: candidate) else { continue }
+                if NSWorkspace.shared.open(url) { return }
+            }
         }
     }
 
     @discardableResult
-    nonisolated private static func runCommand(executable: String, arguments: [String] = []) -> Bool {
+    nonisolated private static func runCommand(executable: String, arguments: [String]) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments

@@ -4,24 +4,15 @@ import SwiftUI
 
 struct CircleIconButton: View {
     enum Style {
-        case neutral
         case accent
         case theme(isDark: Bool)
-        /// 与主题切换按钮同款的毛玻璃底，图标为次级色
-        case chrome
     }
 
-    enum Metrics {
-        case standard
-
-        var diameter: CGFloat { 28 }
-
-        var iconPointSize: CGFloat { 11 }
-    }
+    private static let diameter: CGFloat = 28
+    private static let iconPointSize: CGFloat = 11
 
     let symbolName: String
-    var style: Style = .neutral
-    var metrics: Metrics = .standard
+    let style: Style
     var accent: Color = Color(hex: 0x0A84FF)
     let action: () -> Void
 
@@ -30,30 +21,14 @@ struct CircleIconButton: View {
     var body: some View {
         Button(action: action) {
             switch style {
-            case .neutral:
-                Image(systemName: symbolName)
-                    .font(.system(size: metrics.iconPointSize, weight: .medium))
-                    .foregroundStyle(colorScheme == .dark ? Color(hex: 0x8E8E93) : Color(hex: 0x86868B))
-                    .frame(width: metrics.diameter, height: metrics.diameter)
-                    .background(colorScheme == .dark ? MonitorDarkPalette.neutralButtonFill : Color.black.opacity(0.05))
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .strokeBorder(MonitorTheme.subtleBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
-                    )
             case .accent:
                 materialCircleIcon(foreground: accent, iconWeight: .heavy, gradientForeground: true)
             case .theme(let isDark):
                 materialCircleIcon(foreground: isDark ? Color(hex: 0xFFD60A) : Color(hex: 0xFF9500))
-            case .chrome:
-                materialCircleIcon(
-                    foreground: chromeIconColor(),
-                    iconWeight: .semibold
-                )
             }
         }
         .buttonStyle(.plain)
-        .frame(width: metrics.diameter, height: metrics.diameter)
+        .frame(width: Self.diameter, height: Self.diameter)
     }
 
     private func materialCircleIcon(
@@ -62,7 +37,7 @@ struct CircleIconButton: View {
         gradientForeground: Bool = false
     ) -> some View {
         Image(systemName: symbolName)
-            .font(.system(size: metrics.iconPointSize, weight: iconWeight))
+            .font(.system(size: Self.iconPointSize, weight: iconWeight))
             .foregroundStyle(
                 gradientForeground
                     ? AnyShapeStyle(
@@ -74,7 +49,7 @@ struct CircleIconButton: View {
                     )
                     : AnyShapeStyle(foreground)
             )
-            .frame(width: metrics.diameter, height: metrics.diameter)
+            .frame(width: Self.diameter, height: Self.diameter)
             .background {
                 Circle()
                     .fill(.ultraThinMaterial)
@@ -92,10 +67,6 @@ struct CircleIconButton: View {
                 Circle()
                     .strokeBorder(MonitorTheme.controlBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
             )
-    }
-
-    private func chromeIconColor() -> Color {
-        colorScheme == .dark ? Color(hex: 0x98989D) : Color(hex: 0x6E6E73)
     }
 }
 
@@ -129,17 +100,6 @@ struct MonitorCard<Content: View>: View {
             : Color.white.opacity(MonitorLightPalette.cardSheenOpacity)
     }
 
-    private var innerPadding: EdgeInsets { CardRhythm.cardInset }
-
-    @ViewBuilder
-    private var cardBorderOverlay: some View {
-        MonitorTheme.cardShape
-            .strokeBorder(
-                MonitorTheme.cardBorderGradient(for: colorScheme),
-                lineWidth: MonitorTheme.borderLineWidth
-            )
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
@@ -153,7 +113,7 @@ struct MonitorCard<Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(innerPadding)
+        .padding(CardRhythm.cardInset)
         .background {
             MonitorTheme.cardShape
                 .fill(.ultraThinMaterial)
@@ -167,12 +127,19 @@ struct MonitorCard<Content: View>: View {
                 )
         }
         .clipShape(MonitorTheme.cardShape)
-        .overlay { cardBorderOverlay }
+        .overlay {
+            MonitorTheme.cardShape
+                .strokeBorder(
+                    MonitorTheme.cardBorderGradient(for: colorScheme),
+                    lineWidth: MonitorTheme.borderLineWidth
+                )
+        }
         .compositingGroup()
         .monitorCardShadow(colorScheme: colorScheme)
     }
 }
 
+/// 卡片内的横向分隔细线
 struct CardSectionDivider: View {
     let color: Color
 
@@ -180,6 +147,17 @@ struct CardSectionDivider: View {
         Rectangle()
             .fill(color)
             .frame(height: 0.5)
+    }
+}
+
+/// 卡片内分栏用的竖向分隔细线
+struct CardColumnDivider: View {
+    let color: Color
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(width: 0.5)
     }
 }
 
@@ -195,21 +173,17 @@ struct BatteryChargingIcon: View {
     }
 }
 
-enum LiveMetricLeadingAccessoryLayout {
-    static let iconSpacing: CGFloat = 3
-    static let iconWidth: CGFloat = 10
-    static var overlayOffset: CGFloat { -(iconWidth + iconSpacing) }
-}
-
 struct LiveMetricBlock<LeadingAccessory: View>: View {
-    private let valueFontSize: CGFloat = 25
+    private static var accessoryIconSpacing: CGFloat { 3 }
+    private static var accessoryIconWidth: CGFloat { 10 }
+    /// 叠放模式下把图标移到数值左侧的固定偏移
+    private static var accessoryOverlayOffset: CGFloat { -(accessoryIconWidth + accessoryIconSpacing) }
 
     let value: String
     let unit: String
     let label: String
-    let secondaryText: Color
-    let primaryText: Color
-    var valueColor: Color? = nil
+    let palette: MonitorPalette
+    var valueColor: Color?
     var overlaysLeadingAccessory = false
     @ViewBuilder private var leadingAccessory: () -> LeadingAccessory
 
@@ -217,8 +191,7 @@ struct LiveMetricBlock<LeadingAccessory: View>: View {
         value: String,
         unit: String,
         label: String,
-        secondaryText: Color,
-        primaryText: Color,
+        palette: MonitorPalette,
         valueColor: Color? = nil,
         overlaysLeadingAccessory: Bool = false,
         @ViewBuilder leadingAccessory: @escaping () -> LeadingAccessory
@@ -226,8 +199,7 @@ struct LiveMetricBlock<LeadingAccessory: View>: View {
         self.value = value
         self.unit = unit
         self.label = label
-        self.secondaryText = secondaryText
-        self.primaryText = primaryText
+        self.palette = palette
         self.valueColor = valueColor
         self.overlaysLeadingAccessory = overlaysLeadingAccessory
         self.leadingAccessory = leadingAccessory
@@ -237,12 +209,12 @@ struct LiveMetricBlock<LeadingAccessory: View>: View {
     private var valueRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text(value)
-                .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
-                .foregroundStyle(valueColor ?? primaryText)
+                .font(.system(size: 25, weight: .semibold, design: .rounded))
+                .foregroundStyle(valueColor ?? palette.primaryText)
                 .monospacedDigit()
             Text(unit)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(secondaryText)
+                .foregroundStyle(palette.secondaryText)
         }
     }
 
@@ -250,13 +222,13 @@ struct LiveMetricBlock<LeadingAccessory: View>: View {
         VStack(alignment: .leading, spacing: CardRhythm.labelGap) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(secondaryText)
+                .foregroundStyle(palette.secondaryText)
 
             if overlaysLeadingAccessory {
                 valueRow
                     .overlay(alignment: .leading) {
                         leadingAccessory()
-                            .offset(x: LiveMetricLeadingAccessoryLayout.overlayOffset)
+                            .offset(x: Self.accessoryOverlayOffset)
                     }
             } else {
                 HStack(alignment: .center, spacing: 5) {
@@ -273,16 +245,14 @@ extension LiveMetricBlock where LeadingAccessory == EmptyView {
         value: String,
         unit: String,
         label: String,
-        secondaryText: Color,
-        primaryText: Color,
+        palette: MonitorPalette,
         valueColor: Color? = nil
     ) {
         self.init(
             value: value,
             unit: unit,
             label: label,
-            secondaryText: secondaryText,
-            primaryText: primaryText,
+            palette: palette,
             valueColor: valueColor,
             leadingAccessory: { EmptyView() }
         )
@@ -292,18 +262,17 @@ extension LiveMetricBlock where LeadingAccessory == EmptyView {
 struct StorageStatItem: View {
     let label: String
     let value: String
-    let secondaryText: Color
-    let primaryText: Color
+    let palette: MonitorPalette
     var alignment: HorizontalAlignment = .leading
 
     var body: some View {
         VStack(alignment: alignment, spacing: 2) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(secondaryText)
+                .foregroundStyle(palette.secondaryText)
             Text(value)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(primaryText)
+                .foregroundStyle(palette.primaryText)
                 .monospacedDigit()
         }
     }
@@ -313,10 +282,7 @@ struct StorageCleanerLaunchButton: View {
     let appName: String?
     let appIcon: NSImage?
     let strings: MonitorStrings
-    let accent: Color
-    let controlBackground: Color
-    let primaryText: Color
-    let secondaryText: Color
+    let palette: MonitorPalette
     let onOpen: () -> Void
     let onPick: () -> Void
     let onClear: () -> Void
@@ -334,9 +300,9 @@ struct StorageCleanerLaunchButton: View {
         Button(action: onOpen) {
             HStack(spacing: Self.iconTextSpacing) {
                 iconView
-                Text(buttonTitle)
+                Text(appName ?? strings.pickCleanerApp)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isConfigured ? primaryText : accent)
+                    .foregroundStyle(isConfigured ? palette.primaryText : palette.accent)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: Self.textMaxWidth)
@@ -352,7 +318,7 @@ struct StorageCleanerLaunchButton: View {
             )
         }
         .buttonStyle(.plain)
-        .help(helpText)
+        .help(isConfigured ? strings.openCleanerApp : strings.pickCleanerApp)
         .onHover { isHovering = $0 }
         .contextMenu {
             Button(strings.openCleanerApp, action: onOpen)
@@ -375,55 +341,40 @@ struct StorageCleanerLaunchButton: View {
         } else {
             Image(systemName: "plus.app")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(accent)
+                .foregroundStyle(palette.accent)
                 .frame(width: 14, height: 14)
         }
     }
 
-    private var buttonTitle: String {
-        if let appName {
-            return appName
-        }
-        return strings.pickCleanerApp
-    }
-
-    private var helpText: String {
-        isConfigured ? strings.openCleanerApp : strings.pickCleanerApp
-    }
-
     private var buttonBackground: Color {
         isHovering
-            ? controlBackground.opacity(colorScheme == .dark ? 1.15 : 1.05)
-            : controlBackground
+            ? palette.controlBackground.opacity(colorScheme == .dark ? 1.15 : 1.05)
+            : palette.controlBackground
     }
 }
 
 struct NetworkThroughput: View {
     let label: String
     let value: String
-    let secondaryText: Color
-    let primaryText: Color
-    var emphasized: Bool = false
+    let palette: MonitorPalette
 
     var body: some View {
         VStack(alignment: .leading, spacing: CardRhythm.labelGap) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(secondaryText)
+                .foregroundStyle(palette.secondaryText)
             Text(value)
-                .font(.system(size: emphasized ? 13 : 12, weight: emphasized ? .semibold : .medium))
-                .foregroundStyle(emphasized ? primaryText : secondaryText)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(palette.primaryText)
                 .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, emphasized ? 0 : 10)
-        .padding(.leading, emphasized ? 10 : 0)
+        .padding(.leading, 10)
     }
 }
 
 struct TypeRacingEntryButton: View {
-    let accent: Color
-    let secondaryText: Color
+    let palette: MonitorPalette
     let action: () -> Void
 
     @State private var isHovering = false
@@ -436,7 +387,7 @@ struct TypeRacingEntryButton: View {
                 Text("Type Racing")
                     .font(.system(size: 10, weight: .medium))
             }
-            .foregroundStyle(isHovering ? accent : secondaryText.opacity(0.88))
+            .foregroundStyle(isHovering ? palette.accent : palette.secondaryText.opacity(0.88))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -451,14 +402,13 @@ struct ToggleRow: View {
     let title: String
     @Binding var isOn: Bool
     var showDivider: Bool = false
-    let border: Color
-    let titleColor: Color
+    let palette: MonitorPalette
 
     var body: some View {
         HStack(spacing: 8) {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(titleColor)
+                .foregroundStyle(palette.primaryText)
             Spacer(minLength: 8)
             Toggle("", isOn: $isOn)
                 .toggleStyle(.switch)
@@ -470,7 +420,7 @@ struct ToggleRow: View {
         .overlay(alignment: .bottom) {
             if showDivider {
                 Rectangle()
-                    .fill(border)
+                    .fill(palette.cardBorder)
                     .frame(height: 0.5)
             }
         }
@@ -514,11 +464,9 @@ struct MemoryPressureIndicator: View {
 struct MemoryColumn: View {
     let title: String
     let titleTracking: CGFloat
-    let entries: [(MemoryMetricKey, String, Bool)]
+    let entries: [MemoryMetric]
     let strings: MonitorStrings
-    let secondaryText: Color
-    let primaryText: Color
-    let cardBorder: Color
+    let palette: MonitorPalette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -532,16 +480,16 @@ struct MemoryColumn: View {
             ForEach(entries.indices, id: \.self) { index in
                 let entry = entries[index]
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(strings.memoryLabel(for: entry.0))
-                        .foregroundStyle(secondaryText)
+                    Text(strings.memoryLabel(for: entry.key))
+                        .foregroundStyle(palette.secondaryText)
                         .font(.system(size: 11, weight: .regular))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .layoutPriority(0)
                     Spacer(minLength: 4)
-                    Text(entry.1)
+                    Text(entry.value)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(primaryText)
+                        .foregroundStyle(palette.primaryText)
                         .monospacedDigit()
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -551,7 +499,7 @@ struct MemoryColumn: View {
                 .overlay(alignment: .bottom) {
                     if index < entries.count - 1 {
                         Rectangle()
-                            .fill(cardBorder)
+                            .fill(palette.cardBorder)
                             .frame(height: 0.5)
                     }
                 }
@@ -612,10 +560,6 @@ struct LanguageSelectedSurface<S: InsettableShape>: View {
     let colorScheme: ColorScheme
     var shape: S
 
-    private var selectedBorderOpacity: Double {
-        colorScheme == .dark ? 0.09 : 0.20
-    }
-
     private var selectedSurfaceFill: Color {
         colorScheme == .dark
             ? MonitorDarkPalette.languageSelectedFill
@@ -631,7 +575,7 @@ struct LanguageSelectedSurface<S: InsettableShape>: View {
             )
             .overlay(
                 shape.strokeBorder(
-                    Color.white.opacity(selectedBorderOpacity),
+                    Color.white.opacity(colorScheme == .dark ? 0.09 : 0.20),
                     lineWidth: MonitorTheme.borderLineWidth
                 )
             )
@@ -668,8 +612,7 @@ struct FooterSettingsButton: View {
 struct LanguageSegmentedControl: View {
     @Binding var selection: AppLanguage
     let colorScheme: ColorScheme
-    let primaryText: Color
-    let tertiaryText: Color
+    let palette: MonitorPalette
 
     var body: some View {
         HStack(spacing: 0) {
@@ -681,7 +624,7 @@ struct LanguageSegmentedControl: View {
                 } label: {
                     Text(language.segmentTitle)
                         .font(.system(size: 10, weight: selection == language ? .semibold : .medium))
-                        .foregroundStyle(selection == language ? primaryText : tertiaryText)
+                        .foregroundStyle(selection == language ? palette.primaryText : palette.tertiaryText)
                         .padding(.horizontal, 11)
                         .padding(.vertical, 4)
                         .background {
@@ -747,28 +690,19 @@ struct PanelHoverTooltipBubble: View {
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(tooltipTextColor)
+            .foregroundStyle(colorScheme == .dark ? Color(white: 0.12) : Color.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(tooltipBackground, in: MonitorTheme.minorShape)
+            .background(colorScheme == .dark ? Color(white: 0.95) : Color(white: 0.18), in: MonitorTheme.minorShape)
             .overlay(
                 MonitorTheme.minorShape
-                    .strokeBorder(tooltipBorder, lineWidth: MonitorTheme.borderLineWidth)
+                    .strokeBorder(
+                        Color.white.opacity(colorScheme == .dark ? 0.18 : 0.12),
+                        lineWidth: MonitorTheme.borderLineWidth
+                    )
             )
             .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.12), radius: 3, x: 0, y: 1)
             .fixedSize()
-    }
-
-    private var tooltipBackground: Color {
-        colorScheme == .dark ? Color(white: 0.95) : Color(white: 0.18)
-    }
-
-    private var tooltipTextColor: Color {
-        colorScheme == .dark ? Color(white: 0.12) : Color.white
-    }
-
-    private var tooltipBorder: Color {
-        colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.12)
     }
 }
 
@@ -825,8 +759,7 @@ struct PanelCapsuleSlider: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
                         isDragging = true
-                        let x = gesture.location.x
-                        let newValue = (x / width) * rangeSpan + range.lowerBound
+                        let newValue = (gesture.location.x / width) * rangeSpan + range.lowerBound
                         value = min(max(newValue, range.lowerBound), range.upperBound)
                     }
                     .onEnded { _ in
@@ -838,53 +771,44 @@ struct PanelCapsuleSlider: View {
     }
 }
 
-/// 与面板风格统一的设备选择下拉列表（替代系统 NSMenu 弹窗）
+/// 底部「更多设置」浮层
 struct PanelSettingsMenu: View {
     @Binding var isOn: Bool
     let title: String
     let colorScheme: ColorScheme
-    let primaryText: Color
-    let border: Color
+    let palette: MonitorPalette
 
     var body: some View {
-        ToggleRow(
-            title: title,
-            isOn: $isOn,
-            showDivider: false,
-            border: border,
-            titleColor: primaryText
-        )
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .floatingMenuChrome(colorScheme: colorScheme)
+        ToggleRow(title: title, isOn: $isOn, palette: palette)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .floatingMenuChrome(colorScheme: colorScheme)
     }
 }
 
 /// 与面板风格统一的设备选择下拉列表（替代系统 NSMenu 弹窗）
 struct PanelMenuList: View {
+    static let rowHeight: CGFloat = 28
+    static let maxVisibleRows = 6
+
+    /// 下拉列表在给定选项数下的高度（含内边距）
+    static func height(optionCount: Int) -> CGFloat {
+        CGFloat(min(max(optionCount, 1), maxVisibleRows)) * rowHeight + 8
+    }
+
     let options: [String]
     let selected: String
     let colorScheme: ColorScheme
-    let accent: Color
-    let primaryText: Color
-    let secondaryText: Color
+    let palette: MonitorPalette
     let onSelect: (String) -> Void
 
     @State private var hoveredOption: String?
 
-    private let rowHeight: CGFloat = 28
-    private let maxVisibleRows = 6
-
-    var visibleHeight: CGFloat {
-        let rows = min(options.count, maxVisibleRows)
-        return CGFloat(rows) * rowHeight + 8
-    }
-
     var body: some View {
         Group {
-            if options.count > maxVisibleRows {
+            if options.count > Self.maxVisibleRows {
                 ScrollView(.vertical, showsIndicators: false) { rows }
-                    .frame(height: visibleHeight)
+                    .frame(height: Self.height(optionCount: options.count))
             } else {
                 rows
             }
@@ -908,24 +832,24 @@ struct PanelMenuList: View {
         return HStack(alignment: .center, spacing: 6) {
             Text(option)
                 .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? accent : primaryText)
+                .foregroundStyle(isSelected ? palette.accent : palette.primaryText)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 4)
             if isSelected {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(palette.accent)
             }
         }
         .padding(.horizontal, 8)
-        .frame(height: rowHeight)
+        .frame(height: Self.rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             ZStack {
                 if isSelected {
                     MonitorTheme.minorShape
-                        .fill(accent.opacity(colorScheme == .dark ? 0.16 : 0.10))
+                        .fill(palette.accent.opacity(colorScheme == .dark ? 0.16 : 0.10))
                 }
                 if isHovered {
                     MonitorTheme.minorShape
@@ -944,34 +868,24 @@ struct PanelMenuList: View {
 struct PanelValuePill: View {
     let text: String
     let colorScheme: ColorScheme
-    var action: (() -> Void)?
+    let action: () -> Void
 
     var body: some View {
-        Group {
-            if let action {
-                Button(action: action) {
-                    pillLabel
-                }
-                .buttonStyle(.plain)
-            } else {
-                pillLabel
-            }
+        Button(action: action) {
+            Text(text)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .padding(.vertical, 3)
+                .padding(.horizontal, 8)
+                .background(colorScheme == .dark ? MonitorDarkPalette.valuePillFill : Color.black.opacity(0.06))
+                .clipShape(MonitorTheme.capsuleShape)
+                .overlay(
+                    MonitorTheme.capsuleShape
+                        .strokeBorder(MonitorTheme.subtleBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
+                )
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
-    }
-
-    private var pillLabel: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .padding(.vertical, 3)
-            .padding(.horizontal, 8)
-            .background(colorScheme == .dark ? MonitorDarkPalette.valuePillFill : Color.black.opacity(0.06))
-            .clipShape(MonitorTheme.capsuleShape)
-            .overlay(
-                MonitorTheme.capsuleShape
-                    .strokeBorder(MonitorTheme.subtleBorderColor(for: colorScheme), lineWidth: MonitorTheme.borderLineWidth)
-            )
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
+        .buttonStyle(.plain)
     }
 }
 
@@ -1037,12 +951,7 @@ struct PanelChannelBadge: View {
     private static let fontSize: CGFloat = 10
 
     let label: String
-    var onDoubleTap: (() -> Void)?
-
-    init(label: String, onDoubleTap: (() -> Void)? = nil) {
-        self.label = label
-        self.onDoubleTap = onDoubleTap
-    }
+    let onDoubleTap: () -> Void
 
     var body: some View {
         ZStack {
@@ -1055,9 +964,7 @@ struct PanelChannelBadge: View {
         }
         .frame(width: Self.diameter, height: Self.diameter)
         .contentShape(Circle())
-        .onTapGesture(count: 2) {
-            onDoubleTap?()
-        }
+        .onTapGesture(count: 2, perform: onDoubleTap)
     }
 }
 
@@ -1100,14 +1007,4 @@ extension Color {
         let blue = Double(hex & 0xFF) / 255
         self.init(red: red, green: green, blue: blue)
     }
-}
-
-#Preview("Light") {
-    ContentView(viewModel: .preview)
-        .preferredColorScheme(.light)
-}
-
-#Preview("Dark") {
-    ContentView(viewModel: .preview)
-        .preferredColorScheme(.dark)
 }

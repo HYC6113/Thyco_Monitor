@@ -9,8 +9,6 @@ final class ScreenCleanController {
     private var keyMonitor: Any?
     private var overlayLanguage: AppLanguage = .chs
 
-    var isActive: Bool { !windows.isEmpty }
-
     func setActive(_ active: Bool, language: AppLanguage = .chs) {
         overlayLanguage = language
         if active {

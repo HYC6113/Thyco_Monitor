@@ -13,6 +13,14 @@ enum MemoryMetricKey: Hashable {
     case compressed
 }
 
+/// 内存卡片里的一行：指标键 + 已格式化的数值
+struct MemoryMetric: Identifiable, Equatable {
+    let key: MemoryMetricKey
+    let value: String
+
+    var id: MemoryMetricKey { key }
+}
+
 @MainActor
 @Observable
 final class SystemMonitorViewModel {
@@ -34,15 +42,15 @@ final class SystemMonitorViewModel {
         viewModel.chargingPowerDisplay = "45"
         viewModel.cpuLoadDisplay = "23"
         viewModel.memoryOverview = [
-            (.physicalMemory, "16 GB", true),
-            (.used, "11.2 GB", false),
-            (.cachedFiles, "2.1 GB", false),
-            (.swapUsed, "0 B", false)
+            MemoryMetric(key: .physicalMemory, value: "16 GB"),
+            MemoryMetric(key: .used, value: "11.2 GB"),
+            MemoryMetric(key: .cachedFiles, value: "2.1 GB"),
+            MemoryMetric(key: .swapUsed, value: "0 B")
         ]
         viewModel.memoryBreakdown = [
-            (.appMemory, "4.8 GB", false),
-            (.wiredMemory, "3.2 GB", false),
-            (.compressed, "1.6 GB", false)
+            MemoryMetric(key: .appMemory, value: "4.8 GB"),
+            MemoryMetric(key: .wiredMemory, value: "3.2 GB"),
+            MemoryMetric(key: .compressed, value: "1.6 GB")
         ]
         viewModel.outputDevices = [AudioDevice(id: 1, name: "MacBook Pro 扬声器")]
         viewModel.inputDevices = [AudioDevice(id: 2, name: "MacBook Pro 麦克风")]
@@ -86,8 +94,8 @@ final class SystemMonitorViewModel {
     var panelOpenGeneration = 0
 
     // Memory
-    var memoryOverview: [(MemoryMetricKey, String, Bool)] = []
-    var memoryBreakdown: [(MemoryMetricKey, String, Bool)] = []
+    var memoryOverview: [MemoryMetric] = []
+    var memoryBreakdown: [MemoryMetric] = []
     var memoryPressureLevel: MemoryPressureLevel = .normal
 
     // Audio
@@ -104,10 +112,6 @@ final class SystemMonitorViewModel {
     private var isUpdatingAudioFromSystem = false
     private var volumeBeforeMute: Double?
     private var isMonitoring = false
-    private var fastTickTask: Task<Void, Never>?
-    private var mediumTickTask: Task<Void, Never>?
-    private var isFastTickRunning = false
-    private var isMediumTickRunning = false
 
     var onCleanModeChange: ((Bool) -> Void)?
     var onPresentTypeRacing: (() -> Void)?
@@ -140,8 +144,7 @@ final class SystemMonitorViewModel {
         guard !isPreview, !isMonitoring else { return }
         isMonitoring = true
 
-        let info = SystemInfoProvider.snapshot()
-        headerSummary = info.headerSummary
+        headerSummary = SystemInfoProvider.headerSummary
         hideDesktop = SystemToolsService.isDesktopHidden()
 
         audioManager.start()
@@ -155,28 +158,22 @@ final class SystemMonitorViewModel {
             }
         }
 
-        scheduler.onFastTick = { [weak self] in
-            Task { @MainActor in
-                self?.runFastTickIfNeeded()
+        // 采样在调度器的后台队列完成，这里只把结果搬回主线程写入
+        scheduler.start(
+            onFastTick: { [weak self] sample in
+                guard let self else { return }
+                Task { @MainActor in self.applyFastMetrics(sample) }
+            },
+            onMediumTick: { [weak self] storage in
+                guard let self else { return }
+                Task { @MainActor in self.applyMediumMetrics(storage) }
             }
-        }
-        scheduler.onMediumTick = { [weak self] in
-            Task { @MainActor in
-                self?.runMediumTickIfNeeded()
-            }
-        }
-        scheduler.start()
+        )
     }
 
     func stopMonitoring() {
         guard isMonitoring else { return }
         isMonitoring = false
-        fastTickTask?.cancel()
-        mediumTickTask?.cancel()
-        fastTickTask = nil
-        mediumTickTask = nil
-        isFastTickRunning = false
-        isMediumTickRunning = false
         batteryObserver.stop()
         scheduler.stop()
         audioManager.stop()
@@ -223,11 +220,7 @@ final class SystemMonitorViewModel {
             let success = await Task.detached(priority: .userInitiated) {
                 SystemToolsService.setDesktopHidden(hidden)
             }.value
-            if success {
-                hideDesktop = SystemToolsService.isDesktopHidden()
-            } else {
-                hideDesktop = previous
-            }
+            hideDesktop = success ? SystemToolsService.isDesktopHidden() : previous
         }
     }
 
@@ -243,13 +236,9 @@ final class SystemMonitorViewModel {
     }
 
     func refreshStorageCleanerApp() {
-        if let app = StorageCleanerAppService.savedApp() {
-            storageCleanerAppName = app.name
-            storageCleanerAppIcon = app.icon
-        } else {
-            storageCleanerAppName = nil
-            storageCleanerAppIcon = nil
-        }
+        let app = StorageCleanerAppService.savedApp()
+        storageCleanerAppName = app?.name
+        storageCleanerAppIcon = app?.icon
     }
 
     func openStorageCleanerApp() {
@@ -316,61 +305,25 @@ final class SystemMonitorViewModel {
         launchAtLoginEnabled = LaunchAtLoginService.isEnabled
     }
 
-    private func runFastTickIfNeeded() {
-        guard isMonitoring, !isFastTickRunning else { return }
-        isFastTickRunning = true
-        fastTickTask?.cancel()
+    // MARK: - 指标写入
+    //
+    // `@Observable` 的 setter 无条件通知观察者，因此逐项比较后再赋值，
+    // 数值未变时不触发对应卡片重绘。
 
-        fastTickTask = Task(priority: .userInitiated) {
-            defer { isFastTickRunning = false }
+    private func applyFastMetrics(_ sample: FastMetricsSample) {
+        guard isMonitoring else { return }
 
-            let snapshots = await Task.detached {
-                (
-                    hardware: HardwareMonitor.snapshot(),
-                    network: NetworkMonitor.snapshot(),
-                    cpu: CPUMonitor.snapshot(),
-                    memory: MemoryMonitor.snapshot(),
-                    battery: BatteryMonitor.snapshot()
-                )
-            }.value
-
-            guard !Task.isCancelled, isMonitoring else { return }
-            applyFastMetrics(
-                hardware: snapshots.hardware,
-                network: snapshots.network,
-                cpu: snapshots.cpu,
-                memory: snapshots.memory
-            )
-            applyBatteryMetrics(from: snapshots.battery)
-        }
-    }
-
-    private func runMediumTickIfNeeded() {
-        guard isMonitoring, !isMediumTickRunning else { return }
-        isMediumTickRunning = true
-        mediumTickTask?.cancel()
-
-        mediumTickTask = Task(priority: .utility) {
-            defer { isMediumTickRunning = false }
-
-            let storage = await Task.detached { StorageMonitor.snapshot() }.value
-
-            guard !Task.isCancelled, isMonitoring else { return }
-            applyMediumMetrics(storage: storage)
-        }
-    }
-
-    private func applyFastMetrics(hardware: HardwareSnapshot, network: NetworkSnapshot, cpu: CPUSnapshot, memory: MemorySnapshot) {
-        let temperature = ByteFormatting.formatTemperature(hardware.cpuTemperatureCelsius)
+        let temperature = ByteFormatting.formatTemperature(sample.hardware.cpuTemperatureCelsius)
         if cpuTemperatureDisplay != temperature {
             cpuTemperatureDisplay = temperature
         }
 
-        let fanRPM = ByteFormatting.formatRPM(hardware.fanRPM)
+        let fanRPM = ByteFormatting.formatRPM(sample.hardware.fanRPM)
         if fanRPMDisplay != fanRPM {
             fanRPMDisplay = fanRPM
         }
 
+        let network = sample.network
         if wifiConnected != network.isWifiConnected {
             wifiConnected = network.isWifiConnected
         }
@@ -381,31 +334,51 @@ final class SystemMonitorViewModel {
             downloadSpeedDisplay = network.downloadDisplay
         }
 
-        let cpuLoad = ByteFormatting.formatPercent(cpu.usagePercent)
+        let cpuLoad = ByteFormatting.formatPercent(sample.cpu.usagePercent)
         if cpuLoadDisplay != cpuLoad {
             cpuLoadDisplay = cpuLoad
         }
 
-        let overview: [(MemoryMetricKey, String, Bool)] = [
-            (.physicalMemory, memory.physicalDisplay, true),
-            (.used, memory.usedDisplay, false),
-            (.cachedFiles, memory.cachedDisplay, false),
-            (.swapUsed, memory.swapDisplay, false)
+        let memory = sample.memory
+        let overview = [
+            MemoryMetric(key: .physicalMemory, value: memory.physicalDisplay),
+            MemoryMetric(key: .used, value: memory.usedDisplay),
+            MemoryMetric(key: .cachedFiles, value: memory.cachedDisplay),
+            MemoryMetric(key: .swapUsed, value: memory.swapDisplay)
         ]
-        if !memoryMetricsEqual(memoryOverview, overview) {
+        if memoryOverview != overview {
             memoryOverview = overview
         }
 
-        let breakdown: [(MemoryMetricKey, String, Bool)] = [
-            (.appMemory, memory.appDisplay, false),
-            (.wiredMemory, memory.wiredDisplay, false),
-            (.compressed, memory.compressedDisplay, false)
+        let breakdown = [
+            MemoryMetric(key: .appMemory, value: memory.appDisplay),
+            MemoryMetric(key: .wiredMemory, value: memory.wiredDisplay),
+            MemoryMetric(key: .compressed, value: memory.compressedDisplay)
         ]
-        if !memoryMetricsEqual(memoryBreakdown, breakdown) {
+        if memoryBreakdown != breakdown {
             memoryBreakdown = breakdown
         }
         if memoryPressureLevel != memory.pressureLevel {
             memoryPressureLevel = memory.pressureLevel
+        }
+
+        applyBatteryMetrics(from: sample.battery)
+    }
+
+    private func applyMediumMetrics(_ storage: StorageSnapshot) {
+        guard isMonitoring else { return }
+
+        if availableStorageDisplay != storage.availableDisplay {
+            availableStorageDisplay = storage.availableDisplay
+        }
+        if usedStorageDisplay != storage.usedDisplay {
+            usedStorageDisplay = storage.usedDisplay
+        }
+        if totalStorageDisplay != storage.totalDisplay {
+            totalStorageDisplay = storage.totalDisplay
+        }
+        if storageUsageFraction != storage.usageFraction {
+            storageUsageFraction = storage.usageFraction
         }
     }
 
@@ -424,34 +397,6 @@ final class SystemMonitorViewModel {
         batteryPercentage = battery.percentage
         isBatteryCharging = battery.isCharging
         chargingPowerDisplay = nextChargingPowerDisplay
-    }
-
-    private func applyMediumMetrics(storage: StorageSnapshot) {
-        if availableStorageDisplay != storage.availableDisplay {
-            availableStorageDisplay = storage.availableDisplay
-        }
-        if usedStorageDisplay != storage.usedDisplay {
-            usedStorageDisplay = storage.usedDisplay
-        }
-        if totalStorageDisplay != storage.totalDisplay {
-            totalStorageDisplay = storage.totalDisplay
-        }
-        if storageUsageFraction != storage.usageFraction {
-            storageUsageFraction = storage.usageFraction
-        }
-    }
-
-    private func memoryMetricsEqual(
-        _ lhs: [(MemoryMetricKey, String, Bool)],
-        _ rhs: [(MemoryMetricKey, String, Bool)]
-    ) -> Bool {
-        guard lhs.count == rhs.count else { return false }
-        for (left, right) in zip(lhs, rhs) {
-            if left.0 != right.0 || left.1 != right.1 || left.2 != right.2 {
-                return false
-            }
-        }
-        return true
     }
 
     private func syncAudioFromManager() {

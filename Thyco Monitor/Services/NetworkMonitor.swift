@@ -5,8 +5,6 @@ import SystemConfiguration
 
 struct NetworkSnapshot {
     let isWifiConnected: Bool
-    let uploadSpeed: Double
-    let downloadSpeed: Double
     let uploadDisplay: String
     let downloadDisplay: String
 }
@@ -17,17 +15,17 @@ enum NetworkMonitor {
     nonisolated(unsafe) private static var previousDownload: UInt64 = 0
     nonisolated(unsafe) private static var previousTimestamp: TimeInterval = 0
     nonisolated(unsafe) private static var hasBaseline = false
-    nonisolated(unsafe) private static var lock = NSLock()
+    /// 复用的 sysctl 缓冲区，避免每秒重新分配接口列表内存
     nonisolated(unsafe) private static var sysctlBuffer: UnsafeMutablePointer<UInt8>?
     nonisolated(unsafe) private static var sysctlBufferCapacity: size_t = 0
-    nonisolated(unsafe) private static var bufferLock = NSLock()
+    nonisolated private static let lock = NSLock()
 
     nonisolated static func snapshot() -> NetworkSnapshot {
-        let (totalUp, totalDown) = readTotalBytes()
-        let now = ProcessInfo.processInfo.systemUptime
-
         lock.lock()
         defer { lock.unlock() }
+
+        let (totalUp, totalDown) = readTotalBytes()
+        let now = ProcessInfo.processInfo.systemUptime
 
         var upload: Double = 0
         var download: Double = 0
@@ -52,8 +50,6 @@ enum NetworkMonitor {
 
         return NetworkSnapshot(
             isWifiConnected: isWiFiConnected(),
-            uploadSpeed: upload,
-            downloadSpeed: download,
             uploadDisplay: ByteFormatting.formatBytesPerSecond(upload),
             downloadDisplay: ByteFormatting.formatBytesPerSecond(download)
         )
@@ -110,22 +106,16 @@ enum NetworkMonitor {
             return (0, 0)
         }
 
-        bufferLock.lock()
         if sysctlBufferCapacity < length {
             sysctlBuffer?.deallocate()
             sysctlBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: length)
             sysctlBufferCapacity = length
         }
-        guard let buffer = sysctlBuffer else {
-            bufferLock.unlock()
-            return (0, 0)
-        }
 
-        guard sysctl(&mib, UInt32(mib.count), buffer, &length, nil, 0) == 0 else {
-            bufferLock.unlock()
+        guard let buffer = sysctlBuffer,
+              sysctl(&mib, UInt32(mib.count), buffer, &length, nil, 0) == 0 else {
             return (0, 0)
         }
-        bufferLock.unlock()
 
         var totalUpload: UInt64 = 0
         var totalDownload: UInt64 = 0
@@ -141,16 +131,11 @@ enum NetworkMonitor {
                 let interfaceInfo = cursor.withMemoryRebound(to: if_msghdr2.self, capacity: 1) { $0.pointee }
                 let socketAddress = cursor
                     .advanced(by: MemoryLayout<if_msghdr2>.size)
-                    .withMemoryRebound(to: sockaddr_dl.self, capacity: 1) { $0 }
-                let nameLength = Int(socketAddress.pointee.sdl_nlen)
+                    .withMemoryRebound(to: sockaddr_dl.self, capacity: 1) { $0.pointee }
 
-                if nameLength > 0 {
-                    var socketData = socketAddress.pointee
-                    let nameData = Data(bytes: &socketData.sdl_data, count: nameLength)
-                    if let name = String(data: nameData, encoding: .ascii), name.hasPrefix("en") {
-                        totalDownload &+= interfaceInfo.ifm_data.ifi_ibytes
-                        totalUpload &+= interfaceInfo.ifm_data.ifi_obytes
-                    }
+                if isEthernetInterfaceName(socketAddress) {
+                    totalDownload &+= interfaceInfo.ifm_data.ifi_ibytes
+                    totalUpload &+= interfaceInfo.ifm_data.ifi_obytes
                 }
             }
 
@@ -158,5 +143,14 @@ enum NetworkMonitor {
         }
 
         return (totalUpload, totalDownload)
+    }
+
+    /// 只统计 `en*` 物理网卡；直接比对首两个字节，避免每秒为每个接口构造 Data 与 String。
+    nonisolated private static func isEthernetInterfaceName(_ socketAddress: sockaddr_dl) -> Bool {
+        guard socketAddress.sdl_nlen >= 2 else { return false }
+        var address = socketAddress
+        return withUnsafeBytes(of: &address.sdl_data) { name in
+            name[0] == UInt8(ascii: "e") && name[1] == UInt8(ascii: "n")
+        }
     }
 }

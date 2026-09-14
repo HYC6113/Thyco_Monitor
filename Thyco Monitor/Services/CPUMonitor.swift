@@ -7,7 +7,7 @@ struct CPUSnapshot {
 enum CPUMonitor {
     nonisolated(unsafe) private static var previousTotal: UInt64?
     nonisolated(unsafe) private static var previousIdle: UInt64?
-    nonisolated(unsafe) private static var lock = NSLock()
+    nonisolated private static let lock = NSLock()
 
     nonisolated static func snapshot() -> CPUSnapshot {
         CPUSnapshot(usagePercent: currentUsagePercent())
@@ -19,7 +19,7 @@ enum CPUMonitor {
 
         let result = withUnsafeMutablePointer(to: &cpuInfo) { pointer in
             pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPointer in
-                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, intPointer, &count)
+                host_statistics(MachHost.port, HOST_CPU_LOAD_INFO, intPointer, &count)
             }
         }
 

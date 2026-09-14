@@ -144,16 +144,6 @@ final class AudioManager {
         notifyStateChanged()
     }
 
-    func refreshAll() {
-        refreshOutputDevices()
-        refreshInputDevices()
-        readCurrentOutputDevice()
-        readCurrentInputDevice()
-        readCurrentVolume()
-        readCurrentBalance()
-        notifyStateChanged()
-    }
-
     // MARK: - Listeners
 
     private func setupListeners() {

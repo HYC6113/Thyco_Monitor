@@ -3,15 +3,16 @@ import IOKit
 
 /// SMC 读取服务（参考 macstate / iStat Menus 同类实现：AppleSMC + 数据类型解析）
 final class SMCService: @unchecked Sendable {
-    nonisolated(unsafe) static var shared = SMCService()
+    nonisolated static let shared = SMCService()
+
+    /// Intel 与 Apple Silicon 的 CPU 温度键，按优先级依次探测
+    nonisolated private static let temperatureKeys = ["TC0P", "TC0D", "TC0E", "TC0F", "Tp09", "Tp0T", "Tp01", "Tp05"]
 
     private let lock = NSLock()
-    nonisolated(unsafe) private var connection: io_connect_t = 0
     private let kernelIndex: UInt32 = 2
-
-    private let intelTemperatureKeys = ["TC0P", "TC0D", "TC0E", "TC0F"]
-    private let appleSiliconTemperatureKeys = ["Tp09", "Tp0T", "Tp01", "Tp05"]
+    nonisolated(unsafe) private var connection: io_connect_t = 0
     nonisolated(unsafe) private var validTemperatureKey: String?
+    nonisolated(unsafe) private var cachedFanCount: Int?
 
     private init() {
         openConnection()
@@ -22,14 +23,12 @@ final class SMCService: @unchecked Sendable {
     }
 
     nonisolated func cpuTemperatureCelsius() -> Double? {
-        if let key = validTemperatureKey {
-            if let value = readNumericValue(forKey: key), value > 0, value < 150 {
-                return value
-            }
+        if let key = validTemperatureKey, let value = plausibleTemperature(forKey: key) {
+            return value
         }
-        
-        for key in intelTemperatureKeys + appleSiliconTemperatureKeys {
-            if let value = readNumericValue(forKey: key), value > 0, value < 150 {
+
+        for key in Self.temperatureKeys {
+            if let value = plausibleTemperature(forKey: key) {
                 validTemperatureKey = key
                 return value
             }
@@ -43,24 +42,11 @@ final class SMCService: @unchecked Sendable {
 
         var maxRPM: Double = 0
         for index in 0..<count {
-            if let rpm = readNumericValue(forKey: String(format: "F%dAc", index)), rpm > maxRPM {
+            if let rpm = readNumericValue(forKey: "F\(index)Ac"), rpm > maxRPM {
                 maxRPM = rpm
             }
         }
         return maxRPM > 0 ? Int(maxRPM.rounded()) : 0
-    }
-
-    nonisolated func allFanSpeeds() -> [(current: Double, min: Double, max: Double)] {
-        let count = fanCount()
-        guard count > 0 else { return [] }
-
-        return (0..<count).map { index in
-            (
-                current: readNumericValue(forKey: String(format: "F%dAc", index)) ?? 0,
-                min: readNumericValue(forKey: String(format: "F%dMn", index)) ?? 0,
-                max: readNumericValue(forKey: String(format: "F%dMx", index)) ?? 0
-            )
-        }
     }
 
     nonisolated func dcInPower() -> Double? {
@@ -73,24 +59,14 @@ final class SMCService: @unchecked Sendable {
         return nil
     }
 
-    nonisolated(unsafe) private var cachedFanCount: Int?
+    nonisolated private func plausibleTemperature(forKey key: String) -> Double? {
+        guard let value = readNumericValue(forKey: key), value > 0, value < 150 else { return nil }
+        return value
+    }
 
     nonisolated private func fanCount() -> Int {
         if let cached = cachedFanCount { return cached }
-        guard let result = readValue(forKey: "FNum") else { return 0 }
-
-        let count: Int
-        switch result.dataType {
-        case "ui8 ":
-            count = Int(result.bytes[0])
-        case "ui16":
-            guard result.bytes.count >= 2 else { return 0 }
-            let raw = (UInt16(result.bytes[0]) << 8) | UInt16(result.bytes[1])
-            count = Int(raw)
-        default:
-            count = Int(parseNumericValue(bytes: result.bytes, dataType: result.dataType) ?? 0)
-        }
-        
+        let count = Int(readNumericValue(forKey: "FNum") ?? 0)
         cachedFanCount = count
         return count
     }
@@ -120,11 +96,6 @@ final class SMCService: @unchecked Sendable {
     }
 
     nonisolated private func readNumericValue(forKey key: String) -> Double? {
-        guard let value = readValue(forKey: key) else { return nil }
-        return parseNumericValue(bytes: value.bytes, dataType: value.dataType)
-    }
-
-    nonisolated private func readValue(forKey key: String) -> SMCReadResult? {
         lock.lock()
         defer { lock.unlock() }
 
@@ -144,11 +115,9 @@ final class SMCService: @unchecked Sendable {
         input.data8 = SMCCommand.readBytes.rawValue
         guard callSMC(input: &input, output: &output) else { return nil }
 
-        let count = Int(keyInfo.dataSize)
-        return SMCReadResult(
-            dataType: decodeSMCType(keyInfo.dataType),
-            bytes: Array(output.bytesArray.prefix(count))
-        )
+        return withUnsafeBytes(of: output.bytes) { bytes in
+            parseNumericValue(bytes: bytes, count: Int(keyInfo.dataSize), dataType: keyInfo.dataType)
+        }
     }
 
     nonisolated private func callSMC(input: inout SMCKeyData, output: inout SMCKeyData) -> Bool {
@@ -157,63 +126,50 @@ final class SMCService: @unchecked Sendable {
         return IOConnectCallStructMethod(connection, kernelIndex, &input, inputSize, &output, &outputSize) == KERN_SUCCESS
     }
 
-    nonisolated private func parseNumericValue(bytes: [UInt8], dataType: String) -> Double? {
-        guard !bytes.isEmpty else { return nil }
+    nonisolated private func parseNumericValue(
+        bytes: UnsafeRawBufferPointer,
+        count: Int,
+        dataType: UInt32
+    ) -> Double? {
+        guard count > 0 else { return nil }
+
+        func bigEndianUInt16() -> UInt16? {
+            guard count >= 2 else { return nil }
+            return (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
+        }
 
         switch dataType {
-        case "sp78":
-            guard bytes.count >= 2 else { return nil }
-            let raw = (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
-            return Double(Int16(bitPattern: raw)) / 256.0
-        case "fpe2":
-            guard bytes.count >= 2 else { return nil }
-            let raw = (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
-            return Double(raw) / 4.0
-        case "flt ":
-            guard bytes.count >= 4 else { return nil }
-            var value: Float = 0
-            var bytesCopy = Array(bytes.prefix(4))
-            memcpy(&value, &bytesCopy, 4)
+        case SMCDataType.sp78:
+            return bigEndianUInt16().map { Double(Int16(bitPattern: $0)) / 256.0 }
+        case SMCDataType.fpe2:
+            return bigEndianUInt16().map { Double($0) / 4.0 }
+        case SMCDataType.flt:
+            guard count >= 4 else { return nil }
+            let value = bytes.loadUnaligned(fromByteOffset: 0, as: Float.self)
             return value.isFinite ? Double(value) : nil
-        case "ui8 ":
+        case SMCDataType.ui8:
             return Double(bytes[0])
-        case "ui16":
-            guard bytes.count >= 2 else { return nil }
-            let raw = (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
-            return Double(raw)
-        case "ui32":
-            guard bytes.count >= 4 else { return nil }
+        case SMCDataType.ui16:
+            return bigEndianUInt16().map(Double.init)
+        case SMCDataType.ui32:
+            guard count >= 4 else { return nil }
             let raw = (UInt32(bytes[0]) << 24) | (UInt32(bytes[1]) << 16) | (UInt32(bytes[2]) << 8) | UInt32(bytes[3])
             return Double(raw)
-        case "si8 ":
+        case SMCDataType.si8:
             return Double(Int8(bitPattern: bytes[0]))
-        case "si16":
-            guard bytes.count >= 2 else { return nil }
-            let raw = (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
-            return Double(Int16(bitPattern: raw))
+        case SMCDataType.si16:
+            return bigEndianUInt16().map { Double(Int16(bitPattern: $0)) }
         default:
-            if bytes.count >= 2 {
-                let raw = (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
-                let temp = Double(raw) / 256.0
-                if temp > 0, temp < 150 { return temp }
-            }
-            return nil
+            // 未知类型按 sp78 猜测，仅在结果落在合理温度区间时采信
+            guard let raw = bigEndianUInt16() else { return nil }
+            let temperature = Double(raw) / 256.0
+            return (temperature > 0 && temperature < 150) ? temperature : nil
         }
     }
 
     nonisolated private func encodeSMCKey(_ key: String) -> UInt32? {
         guard key.utf8.count == 4 else { return nil }
         return key.utf8.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-    }
-
-    nonisolated private func decodeSMCType(_ raw: UInt32) -> String {
-        let chars = [
-            Character(UnicodeScalar((raw >> 24) & 0xFF) ?? " "),
-            Character(UnicodeScalar((raw >> 16) & 0xFF) ?? " "),
-            Character(UnicodeScalar((raw >> 8) & 0xFF) ?? " "),
-            Character(UnicodeScalar(raw & 0xFF) ?? " ")
-        ]
-        return String(chars)
     }
 }
 
@@ -222,9 +178,16 @@ private enum SMCCommand: UInt8 {
     case readKeyInfo = 9
 }
 
-private struct SMCReadResult {
-    let dataType: String
-    let bytes: [UInt8]
+/// SMC 数据类型的 FourCharCode；直接比对整数，避免每次读取都解码成字符串。
+private enum SMCDataType {
+    static let sp78: UInt32 = 0x7370_3738 // "sp78"
+    static let fpe2: UInt32 = 0x6670_6532 // "fpe2"
+    static let flt: UInt32 = 0x666C_7420  // "flt "
+    static let ui8: UInt32 = 0x7569_3820  // "ui8 "
+    static let ui16: UInt32 = 0x7569_3136 // "ui16"
+    static let ui32: UInt32 = 0x7569_3332 // "ui32"
+    static let si8: UInt32 = 0x7369_3820  // "si8 "
+    static let si16: UInt32 = 0x7369_3136 // "si16"
 }
 
 private struct SMCKeyDataVers: Sendable {
@@ -269,13 +232,4 @@ private struct SMCKeyData: Sendable {
                 UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) =
         (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-
-    nonisolated var bytesArray: [UInt8] {
-        [
-            bytes.0, bytes.1, bytes.2, bytes.3, bytes.4, bytes.5, bytes.6, bytes.7,
-            bytes.8, bytes.9, bytes.10, bytes.11, bytes.12, bytes.13, bytes.14, bytes.15,
-            bytes.16, bytes.17, bytes.18, bytes.19, bytes.20, bytes.21, bytes.22, bytes.23,
-            bytes.24, bytes.25, bytes.26, bytes.27, bytes.28, bytes.29, bytes.30, bytes.31
-        ]
-    }
 }

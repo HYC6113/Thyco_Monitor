@@ -400,7 +400,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Thyco Monitor/Thyco Monitor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -417,7 +417,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.5.1;
+				MARKETING_VERSION = 1.6.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -446,7 +446,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Thyco Monitor/Thyco Monitor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -463,7 +463,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.5.1;
+				MARKETING_VERSION = 1.6.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",

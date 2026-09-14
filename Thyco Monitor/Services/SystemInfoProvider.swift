@@ -1,27 +1,14 @@
 import Foundation
 import IOKit
 
-struct SystemInfoSnapshot {
-    let deviceName: String
-    let chipName: String
-    let systemVersion: String
-    let headerSummary: String
-}
-
 enum SystemInfoProvider {
-    nonisolated static func snapshot() -> SystemInfoSnapshot {
+    /// 面板标题栏摘要：设备名 · 芯片 · 系统版本（运行期不会变化，只解析一次）
+    static let headerSummary: String = {
         let deviceName = Host.current().localizedName ?? "Mac"
-        let chipName = readChipName()
         let version = ProcessInfo.processInfo.operatingSystemVersion
         let systemVersion = "macOS \(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
-        let summary = "\(deviceName) · \(chipName) · \(systemVersion)"
-        return SystemInfoSnapshot(
-            deviceName: deviceName,
-            chipName: chipName,
-            systemVersion: systemVersion,
-            headerSummary: summary
-        )
-    }
+        return "\(deviceName) · \(readChipName()) · \(systemVersion)"
+    }()
 
     nonisolated private static func readChipName() -> String {
         if let chip = ioPlatformString(forKey: "chip-model"), !chip.isEmpty {

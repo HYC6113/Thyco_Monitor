@@ -6,8 +6,6 @@ final class TypeRacingGameController: NSObject {
     private var panel: FloatingPanel?
     private let windowDelegate = TypeRacingWindowDelegate()
 
-    var isPresented: Bool { panel != nil }
-
     override init() {
         super.init()
         windowDelegate.onClose = { [weak self] in
@@ -33,8 +31,8 @@ final class TypeRacingGameController: NSObject {
         }
 
         let contentSize = TypeRacingWindowLayout.contentSize
-        let panel = FloatingPanel.makeBorderless(contentRect: panelFrame)
-        applyGamePanelConfiguration(to: panel)
+        let panel = FloatingPanel(role: .game, contentRect: panelFrame)
+        panel.delegate = windowDelegate
 
         let rootView = TypeRacingGameView(
             language: language,
@@ -64,14 +62,6 @@ final class TypeRacingGameController: NSObject {
     private func bringPanelToFront(_ panel: FloatingPanel) {
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-    }
-
-    private func applyGamePanelConfiguration(to panel: FloatingPanel) {
-        panel.level = .floating
-        panel.isMovableByWindowBackground = true
-        panel.becomesKeyOnlyIfNeeded = false
-        panel.animationBehavior = .utilityWindow
-        panel.delegate = windowDelegate
     }
 
     private func resolvedPanelFrame(relativeTo monitorPanel: NSWindow?, on screenFrame: NSRect) -> NSRect {

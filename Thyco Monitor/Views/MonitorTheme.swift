@@ -8,52 +8,37 @@ enum MonitorPanelLayout {
 
     static let designWidth: CGFloat = 520
 
-    static var panelWidth: CGFloat { (designWidth * scale).rounded(.toNearestOrAwayFromZero) }
-    static var panelHeight: CGFloat { (designHeight * scale).rounded(.toNearestOrAwayFromZero) }
+    static let panelWidth: CGFloat = (designWidth * scale).rounded(.toNearestOrAwayFromZero)
+    static let panelHeight: CGFloat = (designHeight * scale).rounded(.toNearestOrAwayFromZero)
 
-    static var contentInsets: EdgeInsets { CardRhythm.cardInset }
-    static var contentAreaWidth: CGFloat {
-        designWidth - contentInsets.leading - contentInsets.trailing
-    }
+    static let contentInsets: EdgeInsets = CardRhythm.cardInset
+    static let contentAreaWidth: CGFloat = designWidth - contentInsets.leading - contentInsets.trailing
 
     static let cardSpacing: CGFloat = 10
 
-    static var cardWidth: CGFloat {
-        (contentAreaWidth - cardSpacing) / 2
-    }
+    static let cardWidth: CGFloat = (contentAreaWidth - cardSpacing) / 2
     static let topGridCardHeight: CGFloat = 182
     static let bottomGridCardHeight: CGFloat = 182
     /// 声音板块内容高度（两行控件 + 分隔线 + 区块间距）
     static let soundCardContentHeight: CGFloat = 114.5
     /// 顶/底内边距与侧面一致（13pt），内容区无额外留白
-    static var soundCardHeight: CGFloat {
+    static let soundCardHeight: CGFloat =
         CardRhythm.cardInset.top + soundCardContentHeight + CardRhythm.cardInset.bottom
-    }
     static let headerHeight: CGFloat = 28
     static let footerHeight: CGFloat = 20
     /// 充电功率胶囊文字区固定宽度（适配「充电功率 100W / Chg. 100W」）
     static let chargingPowerCapsuleContentWidth: CGFloat = 88
 
     /// 上方四张卡片区域高度（两行 + 行间距）
-    static var upperCardsHeight: CGFloat {
-        topGridCardHeight + cardSpacing + bottomGridCardHeight
-    }
+    static let upperCardsHeight: CGFloat = topGridCardHeight + cardSpacing + bottomGridCardHeight
 
     /// 五张卡片区域总高度（含行/列间距）
-    static var monitorCardsHeight: CGFloat {
-        upperCardsHeight + cardSpacing + soundCardHeight
-    }
+    static let monitorCardsHeight: CGFloat = upperCardsHeight + cardSpacing + soundCardHeight
 
-    static var contentHeight: CGFloat {
-        headerHeight
-            + monitorCardsHeight
-            + footerHeight
-            + (cardSpacing * 2)
-    }
+    static let contentHeight: CGFloat =
+        headerHeight + monitorCardsHeight + footerHeight + (cardSpacing * 2)
 
-    static var designHeight: CGFloat {
-        contentHeight + contentInsets.top + contentInsets.bottom
-    }
+    static let designHeight: CGFloat = contentHeight + contentInsets.top + contentInsets.bottom
 }
 
 /// 卡片内部排版节奏
@@ -79,21 +64,15 @@ enum MonitorTheme {
     static let controlCornerRadius: CGFloat = 9
     static let minorCornerRadius: CGFloat = 6
 
-    /// NSPanel 外层裁切圆角（换算为缩放后的物理像素）
-    static var scaledPanelCornerRadius: CGFloat {
-        (panelCornerRadius * MonitorPanelLayout.scale).rounded(.toNearestOrAwayFromZero)
-    }
-
     static func continuousRect(_ radius: CGFloat) -> RoundedRectangle {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
     }
 
-    static var panelShape: RoundedRectangle { continuousRect(panelCornerRadius) }
-    static var cardShape: RoundedRectangle { continuousRect(cardCornerRadius) }
-    static var controlShape: RoundedRectangle { continuousRect(controlCornerRadius) }
-    static var minorShape: RoundedRectangle { continuousRect(minorCornerRadius) }
-    static var scaledPanelShape: RoundedRectangle { continuousRect(scaledPanelCornerRadius) }
-    static var capsuleShape: Capsule { Capsule(style: .continuous) }
+    static let panelShape = continuousRect(panelCornerRadius)
+    static let cardShape = continuousRect(cardCornerRadius)
+    static let controlShape = continuousRect(controlCornerRadius)
+    static let minorShape = continuousRect(minorCornerRadius)
+    static let capsuleShape = Capsule(style: .continuous)
 
     static func panelBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
@@ -185,6 +164,45 @@ enum MonitorLightPalette {
     static let languageTrackFill = Color.white.opacity(0.24)
     static let languageSelectedFill = Color.white.opacity(0.34)
     static let menuListOverlayOpacity: Double = 0.22
+}
+
+/// 面板内文字与控件的取色表。按 `colorScheme` 取预置实例，
+/// 避免在每个视图里重复展开深浅色三元表达式，也省去逐个透传颜色参数。
+struct MonitorPalette {
+    let primaryText: Color
+    let secondaryText: Color
+    let tertiaryText: Color
+    let controlBackground: Color
+    let cardBorder: Color
+    let accent: Color
+    let batteryCharging: Color
+    let batteryLow: Color
+
+    static let dark = MonitorPalette(
+        primaryText: Color(hex: 0xF5F5F7),
+        secondaryText: Color(hex: 0x98989D),
+        tertiaryText: Color(hex: 0x636366),
+        controlBackground: MonitorDarkPalette.controlFill,
+        cardBorder: MonitorDarkPalette.cardDivider,
+        accent: Color(hex: 0x0A84FF),
+        batteryCharging: Color(hex: 0x30D158),
+        batteryLow: Color(hex: 0xE06458)
+    )
+
+    static let light = MonitorPalette(
+        primaryText: Color(hex: 0x1D1D1F),
+        secondaryText: Color(hex: 0x6E6E73),
+        tertiaryText: Color(hex: 0xAEAEB2),
+        controlBackground: MonitorLightPalette.controlFill,
+        cardBorder: Color.black.opacity(0.05),
+        accent: Color(hex: 0x007AFF),
+        batteryCharging: Color(hex: 0x34C759),
+        batteryLow: Color(hex: 0xD95048)
+    )
+
+    static func of(_ colorScheme: ColorScheme) -> MonitorPalette {
+        colorScheme == .dark ? .dark : .light
+    }
 }
 
 extension View {
