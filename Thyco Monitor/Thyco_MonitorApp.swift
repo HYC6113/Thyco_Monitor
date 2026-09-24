@@ -60,6 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func applicationDidResignActive() {
+        // 面板打开后再次点菜单栏图标时，系统会先让应用失活。
+        // 这次点击要交给状态栏开关处理，不能在这里先关掉再被 toggle 重新打开。
+        if StatusItemGeometry.screenFrame(of: statusItem?.button)?.contains(NSEvent.mouseLocation) == true {
+            return
+        }
         panelController.close()
     }
 

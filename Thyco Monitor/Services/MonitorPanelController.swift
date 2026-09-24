@@ -61,6 +61,8 @@ final class MonitorPanelController {
     private var presentationState: PresentationState = .hidden
     /// 动画事务代次，用于识别并废弃已被打断的旧动画完成回调
     private var animationToken: UInt = 0
+    /// 最近一次开始收起的时刻。同一次点击里失活/点外逻辑可能先收起，状态栏开关不能立刻再展开。
+    private var dismissStartedAt: TimeInterval = 0
 
     init(
         viewModel: SystemMonitorViewModel,
@@ -118,8 +120,12 @@ final class MonitorPanelController {
         case .visible:
             close()
         case .dismissing:
-            // 正在收起过程中再次点击，打断收起并重新展开
-            show()
+            // 同一次点击会先走到失活或点外关闭，再进入这里。那种情况要保持收起。
+            // 只有用户在收起动画过程中再次点击，才打断并重新展开。
+            let age = ProcessInfo.processInfo.systemUptime - dismissStartedAt
+            if age > 0.05 {
+                show()
+            }
         }
     }
 
@@ -178,6 +184,7 @@ final class MonitorPanelController {
         animationToken &+= 1
         let currentToken = animationToken
         presentationState = .dismissing
+        dismissStartedAt = ProcessInfo.processInfo.systemUptime
 
         let startAlpha = panel.alphaValue
         let remainingDistance = Double(startAlpha)

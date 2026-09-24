@@ -110,9 +110,8 @@ struct TypeRacingGameView: View {
     private var panelHeader: some View {
         HStack(alignment: .center, spacing: 8) {
             exitHintBar
-            Spacer(minLength: 0)
-                .frame(maxWidth: .infinity)
-                .background(TypeRacingWindowDragArea())
+            TypeRacingWindowDragArea()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             clearSavedDataControl
         }
         .padding(.top, TypeRacingWindowLayout.panelHeaderTopInset)
@@ -596,8 +595,30 @@ private struct TypeRacingWindowDragArea: NSViewRepresentable {
 }
 
 private final class TypeRacingWindowDragNSView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     override func mouseDown(with event: NSEvent) {
-        window?.performDrag(with: event)
+        guard let window else { return }
+        // borderless + nonactivatingPanel 上 performDrag 经常被 SwiftUI hosting view 吃掉，
+        // 这里按屏幕坐标自己跟踪拖动。
+        let startMouse = NSEvent.mouseLocation
+        let startOrigin = window.frame.origin
+        while true {
+            guard let next = window.nextEvent(
+                matching: [.leftMouseDragged, .leftMouseUp],
+                until: .distantFuture,
+                inMode: .eventTracking,
+                dequeue: true
+            ) else { break }
+            if next.type == .leftMouseUp { break }
+            let mouse = NSEvent.mouseLocation
+            window.setFrameOrigin(NSPoint(
+                x: startOrigin.x + mouse.x - startMouse.x,
+                y: startOrigin.y + mouse.y - startMouse.y
+            ))
+        }
     }
 }
 

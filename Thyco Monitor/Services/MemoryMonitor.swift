@@ -57,7 +57,8 @@ enum MemoryMonitor {
         let speculative = UInt64(stats.speculative_count)
 
         // 已用细分：与活动监视器 breakdown 一致（单次 host_statistics64 快照，避免 sysctl 混读）
-        let appMemory = UInt64(stats.internal_page_count) * pageSize - purgeable
+        let internalBytes = UInt64(stats.internal_page_count) * pageSize
+        let appMemory = internalBytes > purgeable ? internalBytes - purgeable : 0
         // 文件缓存 = File-backed + Purgeable
         let cached = fileBacked + purgeable
         // 已用 = 物理内存 − 可用内存 − 文件缓存；可用 = (free − speculative) × 页大小

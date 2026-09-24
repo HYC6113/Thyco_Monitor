@@ -121,16 +121,18 @@ enum NetworkMonitor {
         var totalDownload: UInt64 = 0
         var cursor = buffer
         let end = buffer.advanced(by: length)
+        let headerSize = MemoryLayout<if_msghdr>.stride
+        let interfaceInfoSize = MemoryLayout<if_msghdr2>.stride + MemoryLayout<sockaddr_dl>.stride
 
-        while cursor < end {
+        while end - cursor >= headerSize {
             let header = cursor.withMemoryRebound(to: if_msghdr.self, capacity: 1) { $0.pointee }
             let messageLength = Int(header.ifm_msglen)
-            guard messageLength > 0 else { break }
+            guard messageLength >= headerSize, messageLength <= end - cursor else { break }
 
-            if header.ifm_type == UInt8(RTM_IFINFO2) {
+            if header.ifm_type == UInt8(RTM_IFINFO2), messageLength >= interfaceInfoSize {
                 let interfaceInfo = cursor.withMemoryRebound(to: if_msghdr2.self, capacity: 1) { $0.pointee }
                 let socketAddress = cursor
-                    .advanced(by: MemoryLayout<if_msghdr2>.size)
+                    .advanced(by: MemoryLayout<if_msghdr2>.stride)
                     .withMemoryRebound(to: sockaddr_dl.self, capacity: 1) { $0.pointee }
 
                 if isEthernetInterfaceName(socketAddress) {
