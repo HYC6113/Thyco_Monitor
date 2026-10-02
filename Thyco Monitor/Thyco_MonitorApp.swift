@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let monitorViewModel = SystemMonitorViewModel()
     private let screenCleanController = ScreenCleanController()
     private let typeRacingGameController = TypeRacingGameController()
+    private let speedTestPanelController = SpeedTestPanelController()
     private lazy var panelController = MonitorPanelController(
         viewModel: monitorViewModel,
         statusItemButton: { [weak self] in self?.statusItem?.button }
@@ -49,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItem()
         configureScreenClean()
         configureTypeRacing()
+        configureSpeedTest()
 
         // 监听应用失去焦点事件（如 Cmd+Tab 切换到其他应用），自动关闭面板
         NotificationCenter.default.addObserver(
@@ -71,10 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         NotificationCenter.default.removeObserver(self)
         tearDownStatusBarClickMonitor()
-        MainActor.assumeIsolated {
-            typeRacingGameController.dismiss()
-            panelController.closeImmediately()
-        }
+        typeRacingGameController.dismiss()
+        speedTestPanelController.dismiss()
+        panelController.closeImmediately()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -91,13 +92,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private var currentColorScheme: ColorScheme {
+        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light
+    }
+
     private func configureTypeRacing() {
         monitorViewModel.onPresentTypeRacing = { [weak self] in
             guard let self else { return }
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let scheme: ColorScheme = isDark ? .dark : .light
             self.typeRacingGameController.present(
-                colorScheme: scheme,
+                colorScheme: self.currentColorScheme,
+                language: self.monitorViewModel.appLanguage,
+                beside: self.panelController.panel
+            )
+        }
+    }
+
+    private func configureSpeedTest() {
+        monitorViewModel.onPresentSpeedTest = { [weak self] in
+            guard let self else { return }
+            self.speedTestPanelController.present(
+                colorScheme: self.currentColorScheme,
                 language: self.monitorViewModel.appLanguage,
                 beside: self.panelController.panel
             )

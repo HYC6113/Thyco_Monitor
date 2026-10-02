@@ -9,49 +9,56 @@ struct NetworkSnapshot {
     let downloadDisplay: String
 }
 
+/// 只让成功读取的连续快照参与差分，读数失败或计数重置时重新建立基线。
+nonisolated struct NetworkRateSampler {
+    private var previous: (upload: UInt64, download: UInt64, timestamp: TimeInterval)?
+
+    mutating func sample(
+        totals: (upload: UInt64, download: UInt64)?,
+        timestamp: TimeInterval
+    ) -> (upload: Double, download: Double) {
+        guard let totals else {
+            previous = nil
+            return (0, 0)
+        }
+        defer { previous = (totals.upload, totals.download, timestamp) }
+        guard let previous, timestamp > previous.timestamp else { return (0, 0) }
+        let elapsed = timestamp - previous.timestamp
+        return (
+            totals.upload >= previous.upload ? Double(totals.upload - previous.upload) / elapsed : 0,
+            totals.download >= previous.download ? Double(totals.download - previous.download) / elapsed : 0
+        )
+    }
+}
+
 /// 网络吞吐监控（参考 macstate / 柠檬清理状态栏：sysctl NET_RT_IFLIST2）
 enum NetworkMonitor {
-    nonisolated(unsafe) private static var previousUpload: UInt64 = 0
-    nonisolated(unsafe) private static var previousDownload: UInt64 = 0
-    nonisolated(unsafe) private static var previousTimestamp: TimeInterval = 0
-    nonisolated(unsafe) private static var hasBaseline = false
+    nonisolated(unsafe) private static var sampler = NetworkRateSampler()
     /// 复用的 sysctl 缓冲区，避免每秒重新分配接口列表内存
     nonisolated(unsafe) private static var sysctlBuffer: UnsafeMutablePointer<UInt8>?
     nonisolated(unsafe) private static var sysctlBufferCapacity: size_t = 0
     nonisolated private static let lock = NSLock()
+    /// Wi-Fi 未关联时每秒都会走到动态存储回退路径，会话只建一次。
+    nonisolated(unsafe) private static let dynamicStore = SCDynamicStoreCreate(
+        nil, "com.thyco.monitor.network" as CFString, nil, nil
+    )
+
+    nonisolated static func resetBaseline() {
+        lock.lock()
+        defer { lock.unlock() }
+        sampler = NetworkRateSampler()
+    }
 
     nonisolated static func snapshot() -> NetworkSnapshot {
         lock.lock()
         defer { lock.unlock() }
 
-        let (totalUp, totalDown) = readTotalBytes()
-        let now = ProcessInfo.processInfo.systemUptime
-
-        var upload: Double = 0
-        var download: Double = 0
-
-        if hasBaseline {
-            let elapsed = now - previousTimestamp
-            if elapsed > 0 {
-                if totalUp >= previousUpload {
-                    upload = Double(totalUp - previousUpload) / elapsed
-                }
-                if totalDown >= previousDownload {
-                    download = Double(totalDown - previousDownload) / elapsed
-                }
-            }
-        } else {
-            hasBaseline = true
-        }
-
-        previousUpload = totalUp
-        previousDownload = totalDown
-        previousTimestamp = now
+        let rate = sampler.sample(totals: readTotalBytes(), timestamp: ProcessInfo.processInfo.systemUptime)
 
         return NetworkSnapshot(
             isWifiConnected: isWiFiConnected(),
-            uploadDisplay: ByteFormatting.formatBytesPerSecond(upload),
-            downloadDisplay: ByteFormatting.formatBytesPerSecond(download)
+            uploadDisplay: ByteFormatting.formatBytesPerSecond(rate.upload),
+            downloadDisplay: ByteFormatting.formatBytesPerSecond(rate.download)
         )
     }
 
@@ -74,9 +81,7 @@ enum NetworkMonitor {
 
     /// 通过 SystemConfiguration 读取 AirPort 状态；不依赖定位权限，CHANNEL 仅在已关联时出现。
     nonisolated private static func wifiAssociatedViaDynamicStore(interfaceName: String) -> Bool {
-        guard let store = SCDynamicStoreCreate(nil, "com.thyco.monitor.network" as CFString, nil, nil) else {
-            return false
-        }
+        guard let store = dynamicStore else { return false }
 
         let key = "State:/Network/Interface/\(interfaceName)/AirPort" as CFString
         guard let info = SCDynamicStoreCopyValue(store, key) as? [String: Any] else {
@@ -98,12 +103,12 @@ enum NetworkMonitor {
         return false
     }
 
-    nonisolated private static func readTotalBytes() -> (upload: UInt64, download: UInt64) {
+    nonisolated private static func readTotalBytes() -> (upload: UInt64, download: UInt64)? {
         var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
         var length: size_t = 0
 
         guard sysctl(&mib, UInt32(mib.count), nil, &length, nil, 0) == 0, length > 0 else {
-            return (0, 0)
+            return nil
         }
 
         if sysctlBufferCapacity < length {
@@ -114,7 +119,7 @@ enum NetworkMonitor {
 
         guard let buffer = sysctlBuffer,
               sysctl(&mib, UInt32(mib.count), buffer, &length, nil, 0) == 0 else {
-            return (0, 0)
+            return nil
         }
 
         var totalUpload: UInt64 = 0

@@ -5,11 +5,13 @@ import AppKit
 // 层级（从低到高）：
 //   主监控面板  `.popUpMenu`   — 菜单栏弹出，无系统动画干扰、可作为 key 响应快捷键
 //   小游戏面板  `.floating`    — 可拖动、始终可成为 key
+//   测速面板    `.floating`    — 与小游戏相同的伴随窗口
 //   清屏覆盖层  `.screenSaver` — 全屏遮罩，独立 NSWindow（见 ScreenCleanController）
 
 enum PanelWindowRole {
     case monitor
     case game
+    case speedTest
 
     /// 应用角色对应的窗口语义（层级、key 策略、拖动、动画行为）。
     func apply(to panel: FloatingPanel) {
@@ -21,7 +23,7 @@ enum PanelWindowRole {
             panel.animationBehavior = .none
             panel.becomesKeyOnlyIfNeeded = false
             panel.isMovableByWindowBackground = false
-        case .game:
+        case .game, .speedTest:
             panel.level = .floating
             panel.animationBehavior = .utilityWindow
             panel.isMovableByWindowBackground = true

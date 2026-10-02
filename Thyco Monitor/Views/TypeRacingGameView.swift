@@ -176,7 +176,7 @@ struct TypeRacingGameView: View {
         Button {
             engine.clearLocalSavedData()
         } label: {
-            Image(systemName: Self.resolvedSFSymbolName(preferred: ["broom", "broom.fill"], fallback: "eraser.fill"))
+            Image(systemName: Self.clearDataSymbolName)
                 .symbolRenderingMode(.hierarchical)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(
@@ -210,6 +210,9 @@ struct TypeRacingGameView: View {
     private var clearDataIconSecondary: Color {
         TypeRacingPixelStyle.screenGlowSoft.opacity(isClearDataHovering ? 0.55 : 0.42)
     }
+
+    /// 清除记录按钮的图标，测速面板共用。
+    static let clearDataSymbolName = resolvedSFSymbolName(preferred: ["broom", "broom.fill"], fallback: "eraser.fill")
 
     /// 选用当前系统实际存在的 SF Symbol 名称
     private static func resolvedSFSymbolName(preferred: [String], fallback: String) -> String {

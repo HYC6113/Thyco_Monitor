@@ -42,6 +42,21 @@ enum TypeRacingWindowLayout {
         ))
     }
 
+    /// 测速与小游戏共用：贴在主面板左侧；主面板还没有有效尺寸时居中。
+    static func frame(beside monitorPanel: NSWindow?) -> NSRect {
+        let screenFrame = (monitorPanel?.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        guard let monitorPanel else {
+            return centeredFrame(on: screenFrame)
+        }
+
+        let anchor = monitorPanel.frame
+        guard anchor.width > 1, anchor.height > 1 else {
+            return centeredFrame(on: screenFrame)
+        }
+
+        return frameToLeft(of: anchor, on: screenFrame)
+    }
+
     /// 落在主 NSPanel 左侧，垂直与主面板居中对齐
     static func frameToLeft(of monitorPanelFrame: NSRect, on screen: NSRect) -> NSRect {
         let size = contentSize

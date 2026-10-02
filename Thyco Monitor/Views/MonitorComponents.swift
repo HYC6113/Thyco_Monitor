@@ -509,8 +509,10 @@ struct MemoryColumn: View {
     }
 }
 
-struct LanguageTrackCapsuleChrome: ViewModifier {
+/// 语言切换轨道的底色。选中分段叠在这层上面，圆形按钮也用同一层做底，避免材质采样不同导致颜色漂移。
+struct LanguageTrackBackdrop<S: InsettableShape>: View {
     let colorScheme: ColorScheme
+    var shape: S
 
     private var trackSurfaceFill: Color {
         colorScheme == .dark
@@ -518,24 +520,26 @@ struct LanguageTrackCapsuleChrome: ViewModifier {
             : MonitorLightPalette.languageTrackFill
     }
 
+    private var trackSheen: Color {
+        colorScheme == .dark ? Color.white.opacity(0.025) : Color.white.opacity(0.045)
+    }
+
+    var body: some View {
+        shape
+            .fill(.ultraThinMaterial)
+            .overlay(shape.fill(trackSurfaceFill))
+            .overlay(shape.fill(trackSheen))
+    }
+}
+
+struct LanguageTrackCapsuleChrome: ViewModifier {
+    let colorScheme: ColorScheme
+
     func body(content: Content) -> some View {
         content
             .padding(2)
             .background {
-                MonitorTheme.capsuleShape
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        MonitorTheme.capsuleShape
-                            .fill(trackSurfaceFill)
-                    )
-                    .overlay(
-                        MonitorTheme.capsuleShape
-                            .fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.025)
-                                    : Color.white.opacity(0.045)
-                            )
-                    )
+                LanguageTrackBackdrop(colorScheme: colorScheme, shape: MonitorTheme.capsuleShape)
             }
             .clipShape(MonitorTheme.capsuleShape)
             .overlay {
@@ -582,30 +586,94 @@ struct LanguageSelectedSurface<S: InsettableShape>: View {
     }
 }
 
-/// 底部设置按钮：外层轨道与语言切换一致，内层填充与选中语言分段一致
+/// 底栏圆形按钮的整圈填充：与语言切换里「已选中」分段同一叠色，不留轨道色外环。
+struct FooterSelectedCircleSurface: View {
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        ZStack {
+            LanguageTrackBackdrop(colorScheme: colorScheme, shape: Circle())
+            LanguageSelectedSurface(colorScheme: colorScheme, shape: Circle())
+        }
+    }
+}
+
+/// 「更多」与测速入口共用，保证尺寸、描边和选中色一致。
+private struct FooterCircleIconButton: View {
+    let systemName: String
+    let colorScheme: ColorScheme
+    let primaryText: Color
+    var accessibilityLabel: String?
+    let action: () -> Void
+
+    /// 与原先「20pt 内容 + 轨道 2pt 内边距」的外径一致
+    private let diameter: CGFloat = 24
+    private let iconPointSize: CGFloat = 12
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: iconPointSize, weight: .semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(primaryText)
+                .frame(width: diameter, height: diameter)
+                .background {
+                    FooterSelectedCircleSurface(colorScheme: colorScheme)
+                }
+                .clipShape(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(primaryText)
+        .monitorControlShadow(colorScheme: colorScheme)
+        .modifier(OptionalAccessibilityLabel(label: accessibilityLabel))
+    }
+}
+
+private struct OptionalAccessibilityLabel: ViewModifier {
+    let label: String?
+
+    func body(content: Content) -> some View {
+        if let label {
+            content.accessibilityLabel(label)
+        } else {
+            content
+        }
+    }
+}
+
+/// 底部设置按钮：整圈颜色与语言切换的选中分段一致
 struct FooterSettingsButton: View {
     let isMenuOpen: Bool
     let colorScheme: ColorScheme
     let primaryText: Color
     let action: () -> Void
 
-    private let contentSize: CGFloat = 20
-    private let iconPointSize: CGFloat = 12
+    var body: some View {
+        FooterCircleIconButton(
+            systemName: isMenuOpen ? "ellipsis.circle.fill" : "ellipsis.circle",
+            colorScheme: colorScheme,
+            primaryText: primaryText,
+            action: action
+        )
+    }
+}
+
+/// 底部测速入口：尺寸、样式、颜色与「更多」一致
+struct FooterSpeedTestButton: View {
+    let colorScheme: ColorScheme
+    let primaryText: Color
+    let accessibilityLabel: String
+    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: isMenuOpen ? "ellipsis.circle.fill" : "ellipsis.circle")
-                .font(.system(size: iconPointSize, weight: .semibold))
-                .foregroundStyle(primaryText)
-                .frame(width: contentSize, height: contentSize)
-                .background {
-                    LanguageSelectedSurface(colorScheme: colorScheme, shape: Circle())
-                }
-                .clipShape(Circle())
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .languageTrackCapsuleChrome(colorScheme: colorScheme)
+        FooterCircleIconButton(
+            systemName: "globe",
+            colorScheme: colorScheme,
+            primaryText: primaryText,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        )
     }
 }
 

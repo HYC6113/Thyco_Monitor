@@ -23,6 +23,9 @@ final class SMCService: @unchecked Sendable {
     }
 
     nonisolated func cpuTemperatureCelsius() -> Double? {
+        lock.lock()
+        defer { lock.unlock() }
+
         if let key = validTemperatureKey, let value = plausibleTemperature(forKey: key) {
             return value
         }
@@ -37,6 +40,9 @@ final class SMCService: @unchecked Sendable {
     }
 
     nonisolated func primaryFanRPM() -> Int? {
+        lock.lock()
+        defer { lock.unlock() }
+
         let count = fanCount()
         guard count > 0 else { return nil }
 
@@ -50,6 +56,9 @@ final class SMCService: @unchecked Sendable {
     }
 
     nonisolated func dcInPower() -> Double? {
+        lock.lock()
+        defer { lock.unlock() }
+
         if let pdtr = readNumericValue(forKey: "PDTR"), pdtr > 0 {
             return pdtr
         }
@@ -95,10 +104,8 @@ final class SMCService: @unchecked Sendable {
         connection = 0
     }
 
+    /// 调用方持有 lock，SMC 连接与传感器缓存使用同一个同步边界。
     nonisolated private func readNumericValue(forKey key: String) -> Double? {
-        lock.lock()
-        defer { lock.unlock() }
-
         guard connection != 0, let encodedKey = encodeSMCKey(key) else { return nil }
 
         var input = SMCKeyData()

@@ -49,7 +49,7 @@ Thyco Monitor is a lightweight system monitor and utility panel designed specifi
 ### 🛡️ Security & Privacy
 
 Thyco Monitor is committed to user privacy and system security:
-- **Zero Network Requests**: All system monitoring is performed strictly locally; no device information is ever sent to external servers.
+- **Local Monitoring by Default**: System monitoring is performed locally. The optional speed-test action sends measurement traffic to the selected Ookla server, and the speed-test panel looks up the public IP's location via Cloudflare, falling back to ipwho.is and ip.sb only when fields are missing; for mainland China IPs it also queries pconline.com.cn for Chinese city and carrier names. No device information is uploaded.
 - **Read-Only Monitoring**: The majority of features only read system states (such as SMC sensors, network interfaces, disk space, etc.).
 - **Safe Operations**: Features like "Hide Desktop" only modify Finder's `CreateDesktop` preference without deleting or moving any of your files.
 
@@ -113,7 +113,7 @@ Thyco Monitor 是一款专为 macOS 设计的轻量级系统监控与实用工�
 ### 🛡️ 安全性与隐私
 
 Thyco Monitor 致力于保护用户的隐私与系统安全：
-- **无网络请求**：所有的系统数据监控均在本地完成，不会向任何外部服务器发送你的设备信息。
+- **默认本地监控**：系统监控均在本地完成。用户主动使用测速功能时，会向选定的 Ookla 测速节点发送测速流量；测速面板会通过 Cloudflare 查询当前公网 IP 的归属信息，缺字段时才向 ipwho.is 和 ip.sb 补充查询；出口在中国大陆时，还会向太平洋 IP 库（pconline.com.cn）查询中文城市和运营商。不会上传设备信息。
 - **只读监控**：大部分功能仅读取系统状态（如 SMC 传感器、网络接口、磁盘空间等）。
 - **安全的操作**：如“隐藏桌面”功能，仅通过修改 Finder 的 `CreateDesktop` 偏好设置实现，不会删除或移动你的任何文件。
 

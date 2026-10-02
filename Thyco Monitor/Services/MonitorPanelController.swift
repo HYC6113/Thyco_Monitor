@@ -277,7 +277,7 @@ final class MonitorPanelController {
                 self.close()
                 return nil
             case .leftMouseDown, .rightMouseDown:
-                // 核心性能优化：若点击在监控面板本身，瞬间放行，无需进行任何跨进程或全局坐标计算
+                // 点击主面板本身时放行。点在测速或小游戏上按点外处理，收起主面板。
                 if event.window === self.panel {
                     return event
                 }

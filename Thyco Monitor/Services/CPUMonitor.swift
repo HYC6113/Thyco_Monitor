@@ -4,16 +4,38 @@ struct CPUSnapshot {
     let usagePercent: Double
 }
 
+/// 内核累计计数是 UInt32；先逐项计算回绕差值，再扩展并求和。
+nonisolated struct CPUUsageSampler {
+    private var previous: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
+
+    mutating func sample(user: UInt32, system: UInt32, idle: UInt32, nice: UInt32) -> Double {
+        defer { previous = (user, system, idle, nice) }
+        guard let previous else { return 0 }
+
+        let idleDelta = UInt64(idle &- previous.idle)
+        let totalDelta = UInt64(user &- previous.user)
+            + UInt64(system &- previous.system)
+            + idleDelta
+            + UInt64(nice &- previous.nice)
+        guard totalDelta > 0 else { return 0 }
+        return (1 - Double(idleDelta) / Double(totalDelta)) * 100
+    }
+}
+
 enum CPUMonitor {
-    nonisolated(unsafe) private static var previousTotal: UInt64?
-    nonisolated(unsafe) private static var previousIdle: UInt64?
+    nonisolated(unsafe) private static var sampler = CPUUsageSampler()
     nonisolated private static let lock = NSLock()
 
-    nonisolated static func snapshot() -> CPUSnapshot {
-        CPUSnapshot(usagePercent: currentUsagePercent())
+    nonisolated static func resetBaseline() {
+        lock.lock()
+        defer { lock.unlock() }
+        sampler = CPUUsageSampler()
     }
 
-    nonisolated private static func currentUsagePercent() -> Double {
+    nonisolated static func snapshot() -> CPUSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+
         var cpuInfo = host_cpu_load_info()
         var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.size / MemoryLayout<integer_t>.size)
 
@@ -23,30 +45,16 @@ enum CPUMonitor {
             }
         }
 
-        guard result == KERN_SUCCESS else { return 0 }
-
-        let user = UInt64(cpuInfo.cpu_ticks.0)
-        let system = UInt64(cpuInfo.cpu_ticks.1)
-        let idle = UInt64(cpuInfo.cpu_ticks.2)
-        let nice = UInt64(cpuInfo.cpu_ticks.3)
-        let total = user + system + idle + nice
-
-        lock.lock()
-        defer {
-            previousTotal = total
-            previousIdle = idle
-            lock.unlock()
+        guard result == KERN_SUCCESS else {
+            sampler = CPUUsageSampler()
+            return CPUSnapshot(usagePercent: 0)
         }
 
-        guard let previousTotal, let previousIdle, total > previousTotal else {
-            return 0
-        }
-
-        let totalDelta = total - previousTotal
-        let idleDelta = idle - previousIdle
-        guard totalDelta > 0 else { return 0 }
-
-        let usage = (1.0 - Double(idleDelta) / Double(totalDelta)) * 100.0
-        return min(max(usage, 0), 100)
+        return CPUSnapshot(usagePercent: sampler.sample(
+            user: cpuInfo.cpu_ticks.0,
+            system: cpuInfo.cpu_ticks.1,
+            idle: cpuInfo.cpu_ticks.2,
+            nice: cpuInfo.cpu_ticks.3
+        ))
     }
 }

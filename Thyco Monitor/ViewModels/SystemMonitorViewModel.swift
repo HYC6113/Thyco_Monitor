@@ -112,12 +112,19 @@ final class SystemMonitorViewModel {
     private var isUpdatingAudioFromSystem = false
     private var volumeBeforeMute: Double?
     private var isMonitoring = false
+    private var monitoringGeneration: UInt = 0
+    private var desktopUpdateGeneration: UInt = 0
 
     var onCleanModeChange: ((Bool) -> Void)?
     var onPresentTypeRacing: (() -> Void)?
+    var onPresentSpeedTest: (() -> Void)?
 
     func presentTypeRacing() {
         onPresentTypeRacing?()
+    }
+
+    func presentSpeedTest() {
+        onPresentSpeedTest?()
     }
 
     init(isPreview: Bool = false) {
@@ -126,9 +133,7 @@ final class SystemMonitorViewModel {
             appLanguage = MonitorPreferencesService.savedLanguage()
         }
         audioManager.onStateChanged = { [weak self] in
-            Task { @MainActor in
-                self?.syncAudioFromManager()
-            }
+            self?.syncAudioFromManager()
         }
     }
 
@@ -143,6 +148,8 @@ final class SystemMonitorViewModel {
     func startMonitoring() {
         guard !isPreview, !isMonitoring else { return }
         isMonitoring = true
+        monitoringGeneration &+= 1
+        let generation = monitoringGeneration
 
         headerSummary = SystemInfoProvider.headerSummary
         hideDesktop = SystemToolsService.isDesktopHidden()
@@ -154,19 +161,24 @@ final class SystemMonitorViewModel {
 
         batteryObserver.start { [weak self] in
             Task { @MainActor in
-                self?.refreshBatteryMetrics()
+                guard let self, self.isMonitoring, self.monitoringGeneration == generation else { return }
+                self.refreshBatteryMetrics()
             }
         }
 
         // 采样在调度器的后台队列完成，这里只把结果搬回主线程写入
         scheduler.start(
             onFastTick: { [weak self] sample in
-                guard let self else { return }
-                Task { @MainActor in self.applyFastMetrics(sample) }
+                Task { @MainActor [weak self] in
+                    guard let self, self.monitoringGeneration == generation else { return }
+                    self.applyFastMetrics(sample)
+                }
             },
             onMediumTick: { [weak self] storage in
-                guard let self else { return }
-                Task { @MainActor in self.applyMediumMetrics(storage) }
+                Task { @MainActor [weak self] in
+                    guard let self, self.monitoringGeneration == generation else { return }
+                    self.applyMediumMetrics(storage)
+                }
             }
         )
     }
@@ -214,13 +226,14 @@ final class SystemMonitorViewModel {
     }
 
     func updateHideDesktop(_ hidden: Bool) {
-        let previous = hideDesktop
         hideDesktop = hidden
-        Task {
-            let success = await Task.detached(priority: .userInitiated) {
-                SystemToolsService.setDesktopHidden(hidden)
-            }.value
-            hideDesktop = success ? SystemToolsService.isDesktopHidden() : previous
+        desktopUpdateGeneration &+= 1
+        let generation = desktopUpdateGeneration
+        SystemToolsService.setDesktopHidden(hidden) { [weak self] actualHidden in
+            Task { @MainActor [weak self] in
+                guard let self, self.desktopUpdateGeneration == generation else { return }
+                self.hideDesktop = actualHidden
+            }
         }
     }
 
@@ -267,6 +280,7 @@ final class SystemMonitorViewModel {
     func resetAllStoredPreferences() {
         MonitorPreferencesService.clearAll()
         StorageCleanerAppService.clearApp()
+        SpeedTestServerHistory().clear()
 
         appLanguage = .chs
         MonitorPreferencesService.applySystemAppearance()

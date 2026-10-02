@@ -158,13 +158,10 @@ final class AudioManager {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        defaultOutputListenerBlock = { [weak self] _, _ in
-            Task { @MainActor in
-                self?.readCurrentOutputDevice()
-                self?.readCurrentVolume()
-                self?.readCurrentBalance()
-                self?.notifyStateChanged()
-            }
+        defaultOutputListenerBlock = makeListener { manager in
+            manager.readCurrentOutputDevice()
+            manager.readCurrentVolume()
+            manager.readCurrentBalance()
         }
         if let block = defaultOutputListenerBlock {
             AudioObjectAddPropertyListenerBlock(
@@ -180,11 +177,8 @@ final class AudioManager {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        defaultInputListenerBlock = { [weak self] _, _ in
-            Task { @MainActor in
-                self?.readCurrentInputDevice()
-                self?.notifyStateChanged()
-            }
+        defaultInputListenerBlock = makeListener { manager in
+            manager.readCurrentInputDevice()
         }
         if let block = defaultInputListenerBlock {
             AudioObjectAddPropertyListenerBlock(
@@ -200,14 +194,11 @@ final class AudioManager {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        devicesListListenerBlock = { [weak self] _, _ in
-            Task { @MainActor in
-                self?.refreshOutputDevices()
-                self?.refreshInputDevices()
-                self?.readCurrentOutputDevice()
-                self?.readCurrentInputDevice()
-                self?.notifyStateChanged()
-            }
+        devicesListListenerBlock = makeListener { manager in
+            manager.refreshOutputDevices()
+            manager.refreshInputDevices()
+            manager.readCurrentOutputDevice()
+            manager.readCurrentInputDevice()
         }
         if let block = devicesListListenerBlock {
             AudioObjectAddPropertyListenerBlock(
@@ -220,7 +211,7 @@ final class AudioManager {
     }
 
     private func registerVolumeListener(for deviceID: AudioDeviceID) {
-        if volumeListenerDeviceID == deviceID, volumeListenerBlock != nil {
+        if volumeListenerDeviceID == deviceID {
             return
         }
 
@@ -229,21 +220,19 @@ final class AudioManager {
         var volumeAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyVolumeScalar,
             mScope: kAudioDevicePropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
+            // 同时接收主音量和分声道音量变化，兼容仅有声道音量的设备。
+            mElement: kAudioObjectPropertyElementWildcard
         )
 
-        guard AudioObjectHasProperty(deviceID, &volumeAddress) else { return }
-
-        volumeListenerBlock = { [weak self] _, _ in
-            Task { @MainActor in
-                self?.readCurrentVolume()
-                self?.notifyStateChanged()
-            }
+        let volumeBlock = makeListener { manager in
+            manager.readCurrentVolume()
+            manager.readCurrentBalance()
         }
 
-        if let block = volumeListenerBlock {
-            AudioObjectAddPropertyListenerBlock(deviceID, &volumeAddress, DispatchQueue.main, block)
-            volumeListenerDeviceID = deviceID
+        var installedAnyListener = false
+        if AudioObjectAddPropertyListenerBlock(deviceID, &volumeAddress, DispatchQueue.main, volumeBlock) == noErr {
+            volumeListenerBlock = volumeBlock
+            installedAnyListener = true
         }
 
         var muteAddress = AudioObjectPropertyAddress(
@@ -253,15 +242,30 @@ final class AudioManager {
         )
 
         if AudioObjectHasProperty(deviceID, &muteAddress) {
-            muteListenerBlock = { [weak self] _, _ in
-                Task { @MainActor in
-                    self?.readCurrentVolume()
-                    self?.notifyStateChanged()
-                }
+            let muteBlock = makeListener { manager in
+                manager.readCurrentVolume()
             }
 
-            if let block = muteListenerBlock {
-                AudioObjectAddPropertyListenerBlock(deviceID, &muteAddress, DispatchQueue.main, block)
+            if AudioObjectAddPropertyListenerBlock(deviceID, &muteAddress, DispatchQueue.main, muteBlock) == noErr {
+                muteListenerBlock = muteBlock
+                installedAnyListener = true
+            }
+        }
+
+        // 只有至少一个监听真正注册成功时，才记录设备 ID；否则下次仍应允许重试。
+        volumeListenerDeviceID = installedAnyListener ? deviceID : nil
+    }
+
+    /// 所有监听均注册到 DispatchQueue.main。直接处理回调，避免额外 Task 跨过 stop()；
+    /// 已经排队的 CoreAudio 通知在停止后也不应重新安装设备监听。
+    private func makeListener(
+        _ update: @escaping @MainActor (AudioManager) -> Void
+    ) -> AudioObjectPropertyListenerBlock {
+        { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isRunning else { return }
+                update(self)
+                self.notifyStateChanged()
             }
         }
     }
@@ -273,7 +277,7 @@ final class AudioManager {
             var volumeAddress = AudioObjectPropertyAddress(
                 mSelector: kAudioDevicePropertyVolumeScalar,
                 mScope: kAudioDevicePropertyScopeOutput,
-                mElement: kAudioObjectPropertyElementMain
+                mElement: kAudioObjectPropertyElementWildcard
             )
             AudioObjectRemovePropertyListenerBlock(deviceID, &volumeAddress, DispatchQueue.main, block)
             volumeListenerBlock = nil
@@ -728,21 +732,17 @@ final class AudioManager {
             mElement: kAudioObjectPropertyElementMain
         )
 
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &size) == noErr else {
-            return nil
-        }
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var name: Unmanaged<CFString>?
 
-        let namePtr = UnsafeMutablePointer<Unmanaged<CFString>?>.allocate(capacity: 1)
-        defer { namePtr.deallocate() }
-
-        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, namePtr) == noErr,
-              let unmanagedName = namePtr.pointee
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &name) == noErr,
+              let name
         else {
             return nil
         }
 
-        return unmanagedName.takeUnretainedValue() as String
+        // CoreAudio 的名称属性由调用方释放；交给 ARC 接管返回的 +1 引用。
+        return name.takeRetainedValue() as String
     }
 
     private func notifyStateChanged() {

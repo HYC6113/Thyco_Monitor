@@ -4,6 +4,10 @@ import Foundation
 /// 隐藏/显示桌面图标，实现方式与 One Switch、OnlySwitch 一致：
 /// 修改 Finder 的 `CreateDesktop` 偏好并重启 Finder，桌面只保留壁纸，文件仍位于 ~/Desktop。
 enum SystemToolsService {
+    nonisolated private static let desktopQueue = DispatchQueue(
+        label: "com.thyco.monitor.desktop", qos: .userInitiated
+    )
+
     /// 进程内读取 Finder 偏好；该值由外部 `defaults write` 改写，读取前先丢弃本进程缓存。
     /// `defaults write … 0/1` 存的是字符串，One Switch 等工具用 `-bool` 存布尔，两种都要认。
     nonisolated static func isDesktopHidden() -> Bool {
@@ -18,16 +22,21 @@ enum SystemToolsService {
         }
     }
 
-    @discardableResult
-    nonisolated static func setDesktopHidden(_ hidden: Bool) -> Bool {
-        guard runCommand(
-            executable: "/usr/bin/defaults",
-            arguments: ["write", "com.apple.finder", "CreateDesktop", hidden ? "0" : "1"]
-        ) else {
-            return false
+    /// 按用户操作的提交顺序执行，避免快速切换时多个 defaults/killall 进程互相覆盖。
+    nonisolated static func setDesktopHidden(
+        _ hidden: Bool,
+        completion: @escaping @Sendable (Bool) -> Void
+    ) {
+        desktopQueue.async {
+            if runCommand(
+                executable: "/usr/bin/defaults",
+                arguments: ["write", "com.apple.finder", "CreateDesktop", hidden ? "0" : "1"]
+            ) {
+                // One Switch / OnlySwitch 均通过重启 Finder 使设置立即生效。
+                _ = runCommand(executable: "/usr/bin/killall", arguments: ["Finder"])
+            }
+            completion(isDesktopHidden())
         }
-        // One Switch / OnlySwitch 均通过重启 Finder 使设置立即生效
-        return runCommand(executable: "/usr/bin/killall", arguments: ["Finder"])
     }
 
     /// 打开系统设置中的网络（优先跳转 Wi-Fi 页面）。
@@ -63,8 +72,9 @@ enum SystemToolsService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        // 输出不读取；未排空的 Pipe 写满后会让子进程阻塞，waitUntilExit 随之挂起。
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
 
         do {
             try process.run()

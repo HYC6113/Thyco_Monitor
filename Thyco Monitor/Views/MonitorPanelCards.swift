@@ -523,6 +523,16 @@ struct PanelFooterRow: View {
                 palette: palette
             )
 
+            FooterSpeedTestButton(
+                colorScheme: colorScheme,
+                primaryText: palette.primaryText,
+                accessibilityLabel: strings.speedTestTitle
+            ) {
+                openDevicePicker = nil
+                isSettingsMenuOpen = false
+                viewModel.presentSpeedTest()
+            }
+
             FooterSettingsButton(
                 isMenuOpen: isSettingsMenuOpen,
                 colorScheme: colorScheme,

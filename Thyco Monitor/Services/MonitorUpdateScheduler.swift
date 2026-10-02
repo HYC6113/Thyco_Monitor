@@ -24,7 +24,7 @@ struct FastMetricsSample {
 final class MonitorUpdateScheduler {
     /// 内存 / CPU / 网络 / 硬件：1s，与活动监视器刷新节奏接近
     private static let fastInterval: TimeInterval = 1.0
-    /// 存储：5s；电池由 IOPS 电源变化通知驱动，音频由 CoreAudio 属性监听驱动
+    /// 存储：5s；电池同时响应 IOPS 通知，音频由 CoreAudio 属性监听驱动
     private static let mediumInterval: TimeInterval = 5.0
 
     /// 拆成两条队列，避免存储采样阻塞快节拍
@@ -39,6 +39,11 @@ final class MonitorUpdateScheduler {
         onMediumTick: @escaping @Sendable (StorageSnapshot) -> Void
     ) {
         stop()
+        // 与采样排在同一队列，确保上次已开始的采样结束后再重置差分基线。
+        fastQueue.async {
+            CPUMonitor.resetBaseline()
+            NetworkMonitor.resetBaseline()
+        }
         fastTimer = makeTimer(on: fastQueue, interval: Self.fastInterval) {
             onFastTick(.collect())
         }
@@ -64,7 +69,8 @@ final class MonitorUpdateScheduler {
         handler: @escaping @Sendable () -> Void
     ) -> DispatchSourceTimer {
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now(), repeating: interval)
+        // 默认零容差会阻止系统合并唤醒；给 10% 余量，刷新节奏肉眼无差别。
+        timer.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(Int(interval * 100)))
         timer.setEventHandler(handler: handler)
         timer.resume()
         return timer

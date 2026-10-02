@@ -61,6 +61,38 @@ struct MonitorStrings {
     var noInputDevice: String { t("无输入设备", "No Input") }
     var launchAtLogin: String { t("开机自启动", "Launch at Login") }
 
+    var speedTestTitle: String { t("网络测速", "Speed Test") }
+    var speedTestStart: String { t("开始", "Start") }
+    var speedTestTapToStop: String { t("点击停止", "Click to stop") }
+    var speedTestHint: String { t("下载 · 上传 · 抖动", "Down · Up · Jitter") }
+    var speedTestPing: String { t("Ping", "Ping") }
+    var speedTestJitter: String { t("抖动", "Jitter") }
+    var speedTestDownload: String { t("下载", "Down") }
+    var speedTestUpload: String { t("上传", "Up") }
+    var speedTestPhaseLatency: String { t("Ping", "Ping") }
+    var speedTestPhaseDownload: String { t("下载", "Download") }
+    var speedTestPhaseUpload: String { t("上传", "Upload") }
+    var speedTestPhaseDone: String { t("完成", "Done") }
+    var speedTestOffline: String { t("网络不可用", "No network") }
+    var speedTestTimeout: String { t("连接超时", "Timed out") }
+    var speedTestGenericError: String { t("测速失败", "Test failed") }
+    var speedTestClose: String { t("关闭", "Close") }
+    var speedTestClearServerHistory: String { t("清除测速记录", "Clear speed test history") }
+    var speedTestUnitMs: String { "ms" }
+
+    var ipInfoTitle: String { t("当前网络", "This Network") }
+    var ipAddressLabel: String { "IP" }
+    var ipCountryLabel: String { t("国家", "Country") }
+    var ipLocationLabel: String { t("位置", "Location") }
+    var ipTimezoneLabel: String { t("时区", "Time Zone") }
+    var ipISPLabel: String { t("运营商", "ISP") }
+    var ipNodeLabel: String { t("节点", "Node") }
+    var ipLoading: String { t("正在获取网络信息", "Looking up network") }
+    var ipUnavailable: String { t("暂时无法获取", "Unavailable") }
+    var ipRefresh: String { t("刷新", "Refresh") }
+    var ipShow: String { t("显示 IP", "Show IP") }
+    var ipHide: String { t("隐藏 IP", "Hide IP") }
+
     func memoryPressureLabel(for level: MemoryPressureLevel) -> String {
         switch level {
         case .normal: t("内存压力：正常", "Memory Pressure: Normal")
