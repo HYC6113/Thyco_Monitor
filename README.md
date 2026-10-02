@@ -23,12 +23,13 @@ Thyco Monitor is a lightweight system monitor and utility panel designed specifi
 - **Cleaning Mode**: Enters a full-screen blackout mode and locks keyboard input, making it easy to clean your screen and keyboard.
 - **Audio Control**: Quickly switch audio output and input devices, adjust volume, and balance left/right channels.
 - **Type Racing Game**: Built-in mini typing test game to relax and test your typing speed in your spare time.
-- **Launch at Login**: Easily toggle launch-at-login for seamless menu bar residency.
+- **Network Speed Test**: One-click measurement of download, upload speed and latency, automatically picking a server from Ookla's public directory, with the current public IP's location shown.
 
 #### 🎨 Interface & Experience
 - **Floating Panel**: Designed with a frameless frosted glass (vibrancy) background, seamlessly integrating into macOS aesthetics.
 - **Appearance Modes**: Supports manual switching between Dark and Light mode, defaulting to system appearance on first launch.
 - **Multi-language Support**: Built-in localization (supports English and Simplified Chinese).
+- **Launch at Login**: Easily toggle launch-at-login for seamless menu bar residency.
 
 #### 💡 Easter Eggs & Advanced Tricks
 - **Quick Mute**: Click the **percentage number** above the volume slider to quickly mute (set volume to 0), and click again to restore previous volume.
@@ -87,12 +88,13 @@ Thyco Monitor 是一款专为 macOS 设计的轻量级系统监控与实用工�
 - **清洁模式**：进入全屏纯黑模式，屏蔽键盘输入，方便你清洁屏幕和键盘。
 - **音频控制**：快速切换音频输出和输入设备，调整音量以及左右声道平衡。
 - **打字游戏 (Type Racing)**：内置一个简单的打字测速小游戏，在闲暇之余放松一下。
-- **开机自启动**：支持一键开启或关闭开机自动启动，方便常驻使用。
+- **网络测速**：一键测量下载、上传速度与延迟，自动从 Ookla 公共测速节点中挑选服务器，并显示当前公网 IP 的归属地。
 
 #### 🎨 界面与体验
 - **悬浮面板**：采用无边框、毛玻璃背景设计，完美融入 macOS 视觉风格。
 - **外观模式**：支持手动切换深色（Dark）和浅色（Light）模式，初次打开默认跟随系统。
 - **多语言支持**：内置多语言切换（支持中文和英文）。
+- **开机自启动**：支持一键开启或关闭开机自动启动，方便常驻使用。
 
 #### 💡 隐藏彩蛋与高级操作
 - **快速静音**：点击音量滑块上方的**数字百分比**，可一键将音量设为 0（静音），再次点击即可恢复原音量。
