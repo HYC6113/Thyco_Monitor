@@ -44,7 +44,7 @@ final class SpeedTestPanelController: NSObject, NSWindowDelegate {
         panel.contentViewController = hostingController
         self.panel = panel
         installEscMonitor()
-        model.loadIdentity()
+        model.prepare()
         bringPanelToFront(panel)
     }
 

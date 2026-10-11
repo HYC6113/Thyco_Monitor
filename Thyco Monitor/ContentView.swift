@@ -35,7 +35,7 @@ struct SettingsAnchorPreferenceKey: PreferenceKey {
 /// 面板骨架：只负责整体布局、两个浮层以及它们的临时状态。
 /// 每秒刷新的指标都收在各自的卡片视图里，避免整棵视图树随指标失效。
 struct ContentView: View {
-    var viewModel: SystemMonitorViewModel
+    let viewModel: SystemMonitorViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var openDevicePicker: SoundDeviceKind?
     @State private var isSettingsMenuOpen = false

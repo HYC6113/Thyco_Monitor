@@ -20,14 +20,12 @@ enum ByteFormatting {
     nonisolated static func formatBytesPerSecond(_ bytesPerSecond: Double) -> String {
         let absValue = abs(bytesPerSecond)
         switch absValue {
-        case 1_073_741_824...:
-            return String(format: "%.1f GB/s", bytesPerSecond / 1_073_741_824)
-        case 1_048_576...:
-            return String(format: "%.1f MB/s", bytesPerSecond / 1_048_576)
-        case 1_024...:
-            return String(format: "%.0f KB/s", bytesPerSecond / 1_024)
+        case 1_000_000_000...:
+            return String(format: "%.1f GB/s", bytesPerSecond / 1_000_000_000)
+        case 1_000_000...:
+            return String(format: "%.1f MB/s", bytesPerSecond / 1_000_000)
         default:
-            return String(format: "%.0f B/s", bytesPerSecond)
+            return String(format: "%.1f KB/s", bytesPerSecond / 1_000)
         }
     }
 

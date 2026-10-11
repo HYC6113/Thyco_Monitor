@@ -51,8 +51,11 @@ final class SpeedTestModel {
     private let engine: SpeedTestEngine
     private let fetchIdentity: @Sendable () async -> PublicNetworkInfo?
     private var identityTask: Task<Void, Never>?
+    private var candidatesTask: Task<SpeedTestCandidates?, Never>?
     private var runTask: Task<Void, Never>?
     private var runID = UUID()
+    /// 仅当前刷新成功的出口可用于选服；界面上的 info 可以继续展示上次结果。
+    private var historyPublicIP: String?
 
     init(
         engine: SpeedTestEngine = SpeedTestEngine(),
@@ -62,8 +65,16 @@ final class SpeedTestModel {
         self.fetchIdentity = fetchIdentity
     }
 
+    /// 面板打开时调用：刷新出口信息，同时预取节点目录，开测时不必再等最慢的目录请求。
+    func prepare() {
+        loadIdentity()
+        candidatesTask?.cancel()
+        candidatesTask = Task { [engine] in try? await engine.fetchCandidates() }
+    }
+
     func loadIdentity() {
         identityTask?.cancel()
+        historyPublicIP = nil
         if info == nil {
             identityState = .loading
         }
@@ -74,6 +85,7 @@ final class SpeedTestModel {
             self.isRefreshingIdentity = false
             self.identityTask = nil
             if let fetched {
+                self.historyPublicIP = fetched.ip
                 self.updateIdentity(with: fetched)
             } else if self.info == nil {
                 self.identityState = .failed
@@ -97,6 +109,8 @@ final class SpeedTestModel {
         identityTask?.cancel()
         identityTask = nil
         isRefreshingIdentity = false
+        candidatesTask?.cancel()
+        candidatesTask = nil
         stopRun()
     }
 
@@ -127,7 +141,10 @@ final class SpeedTestModel {
         let id = UUID()
         runID = id
         // 与选服并行刷新出口信息，刚切换的系统代理不会继续显示旧出口，也不推迟测速开始。
-        loadIdentity()
+        // 面板刚打开时的刷新仍在进行就沿用它，不从头再查一遍。
+        if identityTask == nil {
+            loadIdentity()
+        }
         runTask?.cancel()
         pingMilliseconds = nil
         jitterMilliseconds = nil
@@ -160,8 +177,13 @@ final class SpeedTestModel {
             if runID == id { runTask = nil }
         }
         do {
-            let server = try await engine.resolveServer()
+            // 预取仍在进行时等它完成，比重新请求目录更快。
+            let prefetched = await candidatesTask?.value
+            let selection = try await engine.resolveServer(prefetched: prefetched) { [weak self] in
+                await self?.historyPublicIP
+            }
             guard isCurrent(id) else { return }
+            let server = selection.server
             self.server = server
 
             let latency = try await engine.measureLatency(url: server.latencyURL) { [weak self] done, total, latest in
@@ -183,7 +205,7 @@ final class SpeedTestModel {
                 self.hasLiveSpeedSample = true
             }
             guard isCurrent(id) else { return }
-            engine.recordDownload(down, on: server)
+            engine.recordDownload(down, for: selection)
             downloadMegabits = down
             gaugeMegabits = down
 

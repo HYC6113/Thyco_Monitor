@@ -2,10 +2,11 @@
 //  Thyco_MonitorTests.swift
 //  Thyco MonitorTests
 //
-//  Created by 陈彦杭 on 2026/3/22.
+//  Created by Thyco.
 //
 
 import AppKit
+import Darwin
 import Testing
 @testable import Thyco_Monitor
 
@@ -96,24 +97,105 @@ struct Thyco_MonitorTests {
 
     @Test func failedNetworkReadDoesNotCreateLifetimeThroughputSpike() {
         var sampler = NetworkRateSampler()
-        _ = sampler.sample(totals: (1_000_000, 2_000_000), timestamp: 1)
-        let live = sampler.sample(totals: (1_000_100, 2_000_200), timestamp: 2)
+        _ = sampler.sample(interfaces: [0: (upload: 1_000_000, download: 2_000_000)], timestamp: 1)
+        let live = sampler.sample(interfaces: [0: (upload: 1_000_100, download: 2_000_200)], timestamp: 2)
         #expect(live.upload == 100 && live.download == 200)
-        let failed = sampler.sample(totals: nil, timestamp: 3)
+        let failed = sampler.sample(interfaces: nil, timestamp: 3)
         #expect(failed.upload == 0 && failed.download == 0)
-        let recovered = sampler.sample(totals: (1_000_300, 2_000_600), timestamp: 4)
+        let recovered = sampler.sample(interfaces: [0: (upload: 1_000_300, download: 2_000_600)], timestamp: 4)
         #expect(recovered.upload == 0 && recovered.download == 0)
-        let next = sampler.sample(totals: (1_000_400, 2_000_800), timestamp: 5)
+        let next = sampler.sample(interfaces: [0: (upload: 1_000_400, download: 2_000_800)], timestamp: 5)
         #expect(next.upload == 100 && next.download == 200)
     }
 
     @Test func networkCountersCanResetWithoutUnderflow() {
         var sampler = NetworkRateSampler()
-        _ = sampler.sample(totals: (10_000, 20_000), timestamp: 1)
-        let reset = sampler.sample(totals: (100, 200), timestamp: 2)
+        _ = sampler.sample(interfaces: [0: (upload: 10_000, download: 20_000)], timestamp: 1)
+        let reset = sampler.sample(interfaces: [0: (upload: 100, download: 200)], timestamp: 2)
         #expect(reset.upload == 0 && reset.download == 0)
-        let next = sampler.sample(totals: (300, 600), timestamp: 4)
+        let next = sampler.sample(interfaces: [0: (upload: 300, download: 600)], timestamp: 4)
         #expect(next.upload == 100 && next.download == 200)
+    }
+
+    @Test func kernelNetworkCountersPreserveBytesAcrossFourGiB() throws {
+        var sampler = NetworkRateSampler()
+        let before = UInt64(UInt32.max) - 100_000_000
+        let first = try #require(networkMessage(index: 4, bytes: before).withUnsafeBytes(NetworkInterfaceReader.decode))
+        let second = try #require(networkMessage(index: 4, bytes: before + 125_000_000).withUnsafeBytes(NetworkInterfaceReader.decode))
+        #expect(second[4]?.download == before + 125_000_000)
+        _ = sampler.sample(interfaces: first, timestamp: 1)
+        let rate = sampler.sample(interfaces: second, timestamp: 2)
+        #expect(rate.upload == 125_000_000 && rate.download == 125_000_000)
+    }
+
+    @Test func kernelNetworkParserRejectsTruncatedMessages() {
+        let message = networkMessage(index: 4, bytes: 1)
+        for length in [1, MemoryLayout<if_msghdr>.size - 1, message.count - 1] {
+            #expect(message.prefix(length).withUnsafeBytes(NetworkInterfaceReader.decode) == nil)
+        }
+    }
+
+    @Test func kernelNetworkParserSkipsAddressMessagesBetweenInterfaces() throws {
+        var address = ifa_msghdr()
+        address.ifam_msglen = UInt16(MemoryLayout<ifa_msghdr>.stride)
+        address.ifam_type = UInt8(RTM_NEWADDR)
+        var messages = networkMessage(index: 4, bytes: 100)
+        withUnsafeBytes(of: &address) { messages.append(contentsOf: $0) }
+        messages.append(networkMessage(index: 5, bytes: 200))
+        let counters = try #require(messages.withUnsafeBytes(NetworkInterfaceReader.decode))
+        #expect(counters[4]?.download == 100)
+        #expect(counters[5]?.download == 200)
+    }
+
+    @Test func disappearingNetworkInterfaceDoesNotEraseOtherTraffic() {
+        var sampler = NetworkRateSampler()
+        _ = sampler.sample(interfaces: [4: (100, 200), 5: (9_000, 9_000)], timestamp: 1)
+        let rate = sampler.sample(interfaces: [4: (200, 400), 6: (30_000, 30_000)], timestamp: 2)
+        #expect(rate.upload == 100 && rate.download == 200)
+    }
+
+    @Test func typeRacingVisibleCharactersMatchOnScreenStream() throws {
+        let laneWidth: CGFloat = 500
+        let engine = TypeRacingGameEngine()
+        engine.prepare(language: .eng)
+        engine.configureLaneWidth(laneWidth)
+        engine.handleInput(" ")
+        // 约 25 秒：滚动距离超过起始位置，最早打过的字符已滚出左缘。
+        for frame in 0..<1_500 {
+            if frame.isMultiple(of: 25) {
+                engine.handleInput(String(engine.streamText[engine.streamIndex]))
+            }
+            engine.tick(delta: 1.0 / 60.0)
+        }
+        try #require(engine.phase == .playing)
+
+        let width = TypeRacingGameEngine.charWidth
+        let expected = engine.streamText.indices.filter { index in
+            let x = laneWidth * 0.68 + CGFloat(index) * width - engine.streamOffset
+            return x > -width && x < laneWidth + width * 2
+        }
+        let visible = engine.visibleCharacters()
+        #expect((expected.first ?? 0) > 0)
+        #expect(visible.map(\.index) == expected)
+        #expect(visible.first { $0.state == .current }?.index == engine.streamIndex)
+    }
+
+    private func networkMessage(index: UInt16, bytes: UInt64) -> Data {
+        var header = if_msghdr2()
+        header.ifm_msglen = UInt16(MemoryLayout<if_msghdr2>.stride + MemoryLayout<sockaddr_dl>.stride)
+        header.ifm_type = UInt8(RTM_IFINFO2)
+        header.ifm_index = index
+        header.ifm_data.ifi_ibytes = bytes
+        header.ifm_data.ifi_obytes = bytes
+        var address = sockaddr_dl()
+        address.sdl_family = UInt8(AF_LINK)
+        address.sdl_nlen = 3
+        address.sdl_data.0 = CChar(UInt8(ascii: "e"))
+        address.sdl_data.1 = CChar(UInt8(ascii: "n"))
+        address.sdl_data.2 = CChar(UInt8(ascii: "0"))
+        var data = withUnsafeBytes(of: &header) { Data($0) }
+        withUnsafeBytes(of: &address) { data.append(contentsOf: $0) }
+        return data
     }
 
     private func makeController(for item: NSStatusItem) -> MonitorPanelController {

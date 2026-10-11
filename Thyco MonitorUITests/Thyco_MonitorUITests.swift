@@ -2,7 +2,7 @@
 //  Thyco_MonitorUITests.swift
 //  Thyco MonitorUITests
 //
-//  Created by 陈彦杭 on 2026/3/22.
+//  Created by Thyco.
 //
 
 import XCTest

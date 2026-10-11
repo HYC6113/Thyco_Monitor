@@ -59,35 +59,9 @@ struct SpeedTestPanelView: View {
 
     /// 外框圆角与 Type Racing 相同：连续圆角 14。
     private var panelChrome: some View {
-        let shape = RoundedRectangle(
-            cornerRadius: TypeRacingWindowLayout.panelCornerRadius,
-            style: .continuous
+        PanelChromeBackground(
+            shape: RoundedRectangle(cornerRadius: TypeRacingWindowLayout.panelCornerRadius, style: .continuous)
         )
-        let panelBackground = colorScheme == .dark ? MonitorDarkPalette.panelBase : MonitorLightPalette.panelBase
-        return shape
-            .fill(.thinMaterial)
-            .overlay(
-                shape.fill(
-                    panelBackground.opacity(
-                        colorScheme == .dark
-                            ? MonitorDarkPalette.panelOverlayOpacity
-                            : MonitorLightPalette.panelOverlayOpacity
-                    )
-                )
-            )
-            .overlay(
-                shape.fill(
-                    colorScheme == .dark
-                        ? Color.white.opacity(MonitorDarkPalette.panelSheenOpacity)
-                        : Color.white.opacity(MonitorLightPalette.panelSheenOpacity)
-                )
-            )
-            .overlay(
-                shape.strokeBorder(
-                    MonitorTheme.panelBorderGradient(for: colorScheme),
-                    lineWidth: MonitorTheme.borderLineWidth
-                )
-            )
     }
 
     // MARK: - 顶栏
@@ -95,7 +69,7 @@ struct SpeedTestPanelView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             escCloseCapsule
-            SpeedTestWindowDragArea()
+            PanelWindowDragArea()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             clearHistoryControl
             identityHeader
@@ -149,7 +123,7 @@ struct SpeedTestPanelView: View {
             Button {
                 model.clearServerHistory()
             } label: {
-                Image(systemName: TypeRacingGameView.clearDataSymbolName)
+                Image(systemName: CompanionPanelSymbols.clearData)
                     .symbolRenderingMode(.hierarchical)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(
@@ -756,42 +730,6 @@ private struct IdentityRow {
     let label: String
     let value: String
     var canReveal = false
-}
-
-// MARK: - 拖动标题栏
-
-private struct SpeedTestWindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> SpeedTestWindowDragNSView {
-        SpeedTestWindowDragNSView()
-    }
-
-    func updateNSView(_ nsView: SpeedTestWindowDragNSView, context: Context) {}
-}
-
-private final class SpeedTestWindowDragNSView: NSView {
-    override var mouseDownCanMoveWindow: Bool { true }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let window else { return }
-        let startMouse = NSEvent.mouseLocation
-        let startOrigin = window.frame.origin
-        while true {
-            guard let next = window.nextEvent(
-                matching: [.leftMouseDragged, .leftMouseUp],
-                until: .distantFuture,
-                inMode: .eventTracking,
-                dequeue: true
-            ) else { break }
-            if next.type == .leftMouseUp { break }
-            let mouse = NSEvent.mouseLocation
-            window.setFrameOrigin(NSPoint(
-                x: startOrigin.x + mouse.x - startMouse.x,
-                y: startOrigin.y + mouse.y - startMouse.y
-            ))
-        }
-    }
 }
 
 #Preview("Speed Test") {

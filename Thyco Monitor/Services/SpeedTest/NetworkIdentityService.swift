@@ -148,13 +148,22 @@ nonisolated enum NetworkIdentityService {
     private static let cloudflareTraceURL = URL(string: "https://speed.cloudflare.com/cdn-cgi/trace")!
     private static let pconlineURL = URL(string: "https://whois.pconline.com.cn/ipJson.jsp")!
 
-    private static func cloudflareMetaInfo(session: URLSession) async -> PublicNetworkInfo? {
+    /// 元数据不可用时退到 trace；连接本身失败时 trace 在同一主机上也会失败，不再多等一次超时。
+    private static func cloudflareInfo(session: URLSession) async -> PublicNetworkInfo? {
         var request = URLRequest(url: cloudflareMetaURL)
         request.timeoutInterval = 4
-        guard let (data, response) = try? await session.data(for: request),
-              let http = response as? HTTPURLResponse,
-              (200...299).contains(http.statusCode) else { return nil }
-        return PublicNetworkInfo.cloudflareMeta(data)
+        // /meta 只响应来自测速页的请求，缺少 Referer 时返回 403。
+        request.setValue("https://speed.cloudflare.com/", forHTTPHeaderField: "Referer")
+        do {
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+               let meta = PublicNetworkInfo.cloudflareMeta(data) {
+                return meta
+            }
+        } catch {
+            return nil
+        }
+        return await cloudflareTraceInfo(session: session)
     }
 
     private static func cloudflareTraceInfo(session: URLSession) async -> PublicNetworkInfo? {
@@ -172,22 +181,16 @@ nonisolated enum NetworkIdentityService {
         let session = URLSession(configuration: SpeedTestEngine.sessionConfiguration())
         defer { session.invalidateAndCancel() }
 
-        // Cloudflare 元数据通常已包含全部字段，第三方 IP 库只在缺字段时依次补齐，少让一方看到出口 IP。
-        // 身份刷新与选服并行，顺序请求的额外耗时被选服时间覆盖。
-        var merged = PublicNetworkInfo()
-        let sources: [@Sendable (URLSession) async -> PublicNetworkInfo?] = [
-            { session in
-                if let meta = await cloudflareMetaInfo(session: session) { return meta }
-                return await cloudflareTraceInfo(session: session)
-            },
-            { await ipWhoInfo(session: $0) },
-            { await ipSBInfo(session: $0) }
-        ]
-        for source in sources {
-            guard !merged.isComplete, !Task.isCancelled else { break }
-            if let info = await source(session) {
-                merged = merged.fillingGaps(from: info)
-            }
+        // Cloudflare 元数据不含时区，总要再查 ipwho，两者并行；字段以 Cloudflare 为准。
+        // ip.sb 只在仍缺字段时补齐，少让一方看到出口 IP。
+        async let cloudflare = cloudflareInfo(session: session)
+        async let ipWho = ipWhoInfo(session: session)
+        var merged = await cloudflare ?? PublicNetworkInfo()
+        if let info = await ipWho {
+            merged = merged.fillingGaps(from: info)
+        }
+        if !merged.isComplete, !Task.isCancelled, let info = await ipSBInfo(session: session) {
+            merged = merged.fillingGaps(from: info)
         }
         // 按已确定的出口 IP 查询，不受分流代理影响。
         if merged.countryCode?.uppercased() == "CN", !Task.isCancelled {

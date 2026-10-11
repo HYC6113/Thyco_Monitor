@@ -110,7 +110,7 @@ struct TypeRacingGameView: View {
     private var panelHeader: some View {
         HStack(alignment: .center, spacing: 8) {
             exitHintBar
-            TypeRacingWindowDragArea()
+            PanelWindowDragArea()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             clearSavedDataControl
         }
@@ -176,7 +176,7 @@ struct TypeRacingGameView: View {
         Button {
             engine.clearLocalSavedData()
         } label: {
-            Image(systemName: Self.clearDataSymbolName)
+            Image(systemName: CompanionPanelSymbols.clearData)
                 .symbolRenderingMode(.hierarchical)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(
@@ -209,22 +209,6 @@ struct TypeRacingGameView: View {
 
     private var clearDataIconSecondary: Color {
         TypeRacingPixelStyle.screenGlowSoft.opacity(isClearDataHovering ? 0.55 : 0.42)
-    }
-
-    /// 清除记录按钮的图标，测速面板共用。
-    static let clearDataSymbolName = resolvedSFSymbolName(preferred: ["broom", "broom.fill"], fallback: "eraser.fill")
-
-    /// 选用当前系统实际存在的 SF Symbol 名称
-    private static func resolvedSFSymbolName(preferred: [String], fallback: String) -> String {
-        for name in preferred {
-            if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
-                return name
-            }
-        }
-        if NSImage(systemSymbolName: fallback, accessibilityDescription: nil) != nil {
-            return fallback
-        }
-        return "trash"
     }
 
     // MARK: - 游戏主内容（赛道 + 打字带，底边两角与面板外框同心）
@@ -585,44 +569,6 @@ struct TypeRacingGameView: View {
 /// 引用类型的帧计时基准：更新其属性不会触发 SwiftUI 视图失效。
 private final class FrameClock {
     var last = Date()
-}
-
-// MARK: - 拖动标题栏
-
-private struct TypeRacingWindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> TypeRacingWindowDragNSView {
-        TypeRacingWindowDragNSView()
-    }
-
-    func updateNSView(_ nsView: TypeRacingWindowDragNSView, context: Context) {}
-}
-
-private final class TypeRacingWindowDragNSView: NSView {
-    override var mouseDownCanMoveWindow: Bool { true }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let window else { return }
-        // borderless + nonactivatingPanel 上 performDrag 经常被 SwiftUI hosting view 吃掉，
-        // 这里按屏幕坐标自己跟踪拖动。
-        let startMouse = NSEvent.mouseLocation
-        let startOrigin = window.frame.origin
-        while true {
-            guard let next = window.nextEvent(
-                matching: [.leftMouseDragged, .leftMouseUp],
-                until: .distantFuture,
-                inMode: .eventTracking,
-                dequeue: true
-            ) else { break }
-            if next.type == .leftMouseUp { break }
-            let mouse = NSEvent.mouseLocation
-            window.setFrameOrigin(NSPoint(
-                x: startOrigin.x + mouse.x - startMouse.x,
-                y: startOrigin.y + mouse.y - startMouse.y
-            ))
-        }
-    }
 }
 
 // MARK: - Key capture

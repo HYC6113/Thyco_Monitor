@@ -69,8 +69,8 @@ final class SystemMonitorViewModel {
     var cpuTemperatureDisplay = "—"
     var fanRPMDisplay = "—"
     var wifiConnected = false
-    var uploadSpeedDisplay = "0 B/s"
-    var downloadSpeedDisplay = "0 B/s"
+    var uploadSpeedDisplay = ByteFormatting.formatBytesPerSecond(0)
+    var downloadSpeedDisplay = ByteFormatting.formatBytesPerSecond(0)
 
     // Storage
     var availableStorageDisplay = "—"
@@ -151,8 +151,8 @@ final class SystemMonitorViewModel {
         monitoringGeneration &+= 1
         let generation = monitoringGeneration
 
-        headerSummary = SystemInfoProvider.headerSummary
-        hideDesktop = SystemToolsService.isDesktopHidden()
+        update(\.headerSummary, to: SystemInfoProvider.headerSummary)
+        update(\.hideDesktop, to: SystemToolsService.isDesktopHidden())
 
         audioManager.start()
         syncAudioFromManager()
@@ -320,61 +320,44 @@ final class SystemMonitorViewModel {
     }
 
     // MARK: - 指标写入
-    //
-    // `@Observable` 的 setter 无条件通知观察者，因此逐项比较后再赋值，
-    // 数值未变时不触发对应卡片重绘。
+
+    /// `@Observable` 的 setter 无条件通知观察者；值未变时跳过赋值，对应卡片不重绘。
+    private func update<Value: Equatable>(
+        _ keyPath: ReferenceWritableKeyPath<SystemMonitorViewModel, Value>,
+        to value: Value
+    ) {
+        if self[keyPath: keyPath] != value {
+            self[keyPath: keyPath] = value
+        }
+    }
 
     private func applyFastMetrics(_ sample: FastMetricsSample) {
         guard isMonitoring else { return }
 
-        let temperature = ByteFormatting.formatTemperature(sample.hardware.cpuTemperatureCelsius)
-        if cpuTemperatureDisplay != temperature {
-            cpuTemperatureDisplay = temperature
-        }
+        update(\.cpuTemperatureDisplay, to: ByteFormatting.formatTemperature(sample.hardware.cpuTemperatureCelsius))
+        update(\.fanRPMDisplay, to: ByteFormatting.formatRPM(sample.hardware.fanRPM))
 
-        let fanRPM = ByteFormatting.formatRPM(sample.hardware.fanRPM)
-        if fanRPMDisplay != fanRPM {
-            fanRPMDisplay = fanRPM
-        }
-
-        let network = sample.network
-        if wifiConnected != network.isWifiConnected {
-            wifiConnected = network.isWifiConnected
-        }
-        if uploadSpeedDisplay != network.uploadDisplay {
-            uploadSpeedDisplay = network.uploadDisplay
-        }
-        if downloadSpeedDisplay != network.downloadDisplay {
-            downloadSpeedDisplay = network.downloadDisplay
-        }
-
-        let cpuLoad = ByteFormatting.formatPercent(sample.cpu.usagePercent)
-        if cpuLoadDisplay != cpuLoad {
-            cpuLoadDisplay = cpuLoad
+        update(\.wifiConnected, to: sample.network.isWifiConnected)
+        // 基线样本的差分为 0；保留上次读数直到首个有效值，避免打开面板时先闪一下 0。
+        if !sample.isBaseline {
+            update(\.uploadSpeedDisplay, to: sample.network.uploadDisplay)
+            update(\.downloadSpeedDisplay, to: sample.network.downloadDisplay)
+            update(\.cpuLoadDisplay, to: ByteFormatting.formatPercent(sample.cpu.usagePercent))
         }
 
         let memory = sample.memory
-        let overview = [
+        update(\.memoryOverview, to: [
             MemoryMetric(key: .physicalMemory, value: memory.physicalDisplay),
             MemoryMetric(key: .used, value: memory.usedDisplay),
             MemoryMetric(key: .cachedFiles, value: memory.cachedDisplay),
             MemoryMetric(key: .swapUsed, value: memory.swapDisplay)
-        ]
-        if memoryOverview != overview {
-            memoryOverview = overview
-        }
-
-        let breakdown = [
+        ])
+        update(\.memoryBreakdown, to: [
             MemoryMetric(key: .appMemory, value: memory.appDisplay),
             MemoryMetric(key: .wiredMemory, value: memory.wiredDisplay),
             MemoryMetric(key: .compressed, value: memory.compressedDisplay)
-        ]
-        if memoryBreakdown != breakdown {
-            memoryBreakdown = breakdown
-        }
-        if memoryPressureLevel != memory.pressureLevel {
-            memoryPressureLevel = memory.pressureLevel
-        }
+        ])
+        update(\.memoryPressureLevel, to: memory.pressureLevel)
 
         applyBatteryMetrics(from: sample.battery)
     }
@@ -382,18 +365,10 @@ final class SystemMonitorViewModel {
     private func applyMediumMetrics(_ storage: StorageSnapshot) {
         guard isMonitoring else { return }
 
-        if availableStorageDisplay != storage.availableDisplay {
-            availableStorageDisplay = storage.availableDisplay
-        }
-        if usedStorageDisplay != storage.usedDisplay {
-            usedStorageDisplay = storage.usedDisplay
-        }
-        if totalStorageDisplay != storage.totalDisplay {
-            totalStorageDisplay = storage.totalDisplay
-        }
-        if storageUsageFraction != storage.usageFraction {
-            storageUsageFraction = storage.usageFraction
-        }
+        update(\.availableStorageDisplay, to: storage.availableDisplay)
+        update(\.usedStorageDisplay, to: storage.usedDisplay)
+        update(\.totalStorageDisplay, to: storage.totalDisplay)
+        update(\.storageUsageFraction, to: storage.usageFraction)
     }
 
     private func refreshBatteryMetrics() {
@@ -401,26 +376,20 @@ final class SystemMonitorViewModel {
     }
 
     private func applyBatteryMetrics(from battery: BatterySnapshot) {
-        let nextChargingPowerDisplay = battery.chargingPowerDisplay
-        guard batteryDisplay != battery.displayValue
-            || batteryPercentage != battery.percentage
-            || isBatteryCharging != battery.isCharging
-            || chargingPowerDisplay != nextChargingPowerDisplay
-        else { return }
-        batteryDisplay = battery.displayValue
-        batteryPercentage = battery.percentage
-        isBatteryCharging = battery.isCharging
-        chargingPowerDisplay = nextChargingPowerDisplay
+        update(\.batteryDisplay, to: battery.displayValue)
+        update(\.batteryPercentage, to: battery.percentage)
+        update(\.isBatteryCharging, to: battery.isCharging)
+        update(\.chargingPowerDisplay, to: battery.chargingPowerDisplay)
     }
 
     private func syncAudioFromManager() {
         isUpdatingAudioFromSystem = true
-        outputDevices = audioManager.outputDevices
-        inputDevices = audioManager.inputDevices
-        selectedOutputDeviceID = audioManager.selectedOutputDeviceID
-        selectedInputDeviceID = audioManager.selectedInputDeviceID
-        volume = audioManager.volume
-        balance = audioManager.balance
+        update(\.outputDevices, to: audioManager.outputDevices)
+        update(\.inputDevices, to: audioManager.inputDevices)
+        update(\.selectedOutputDeviceID, to: audioManager.selectedOutputDeviceID)
+        update(\.selectedInputDeviceID, to: audioManager.selectedInputDeviceID)
+        update(\.volume, to: audioManager.volume)
+        update(\.balance, to: audioManager.balance)
         if volume > 0 {
             volumeBeforeMute = nil
         }

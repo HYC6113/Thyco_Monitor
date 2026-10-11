@@ -36,6 +36,14 @@ enum CPUMonitor {
         lock.lock()
         defer { lock.unlock() }
 
+        guard let ticks = readLoadInfo()?.cpu_ticks else {
+            sampler = CPUUsageSampler()
+            return CPUSnapshot(usagePercent: 0)
+        }
+        return CPUSnapshot(usagePercent: sampler.sample(user: ticks.0, system: ticks.1, idle: ticks.2, nice: ticks.3))
+    }
+
+    nonisolated private static func readLoadInfo() -> host_cpu_load_info? {
         var cpuInfo = host_cpu_load_info()
         var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.size / MemoryLayout<integer_t>.size)
 
@@ -44,17 +52,6 @@ enum CPUMonitor {
                 host_statistics(MachHost.port, HOST_CPU_LOAD_INFO, intPointer, &count)
             }
         }
-
-        guard result == KERN_SUCCESS else {
-            sampler = CPUUsageSampler()
-            return CPUSnapshot(usagePercent: 0)
-        }
-
-        return CPUSnapshot(usagePercent: sampler.sample(
-            user: cpuInfo.cpu_ticks.0,
-            system: cpuInfo.cpu_ticks.1,
-            idle: cpuInfo.cpu_ticks.2,
-            nice: cpuInfo.cpu_ticks.3
-        ))
+        return result == KERN_SUCCESS ? cpuInfo : nil
     }
 }

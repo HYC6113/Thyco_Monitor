@@ -108,10 +108,9 @@ nonisolated enum OoklaServerDirectory {
         return Array(httpsRecords(hongKong).filter(isHongKong).prefix(hongKongProbeCount))
     }
 
-    /// 返回可达的候选节点，按 HTTP 往返从快到慢排序；至少一台。
-    static func rankedServers(session: URLSession, usesProxyRoute: Bool? = nil) async throws -> [SpeedTestServer] {
+    /// 当前网络路径下待探测的候选节点，尚未按延迟排序。
+    static func candidateServers(session: URLSession, usesProxyRoute: Bool) async throws -> [SpeedTestServer] {
         try Task.checkCancellation()
-        let usesProxyRoute = usesProxyRoute ?? systemProxyIsEnabled()
         let nearest = try await fetch(nearestURL, session: session)
         try Task.checkCancellation()
         let hongKong: [OoklaServerRecord]
@@ -125,14 +124,11 @@ nonisolated enum OoklaServerDirectory {
                 hongKong = []
             }
         }
-        let servers = candidates(
+        return candidates(
             nearest: nearest,
             hongKong: hongKong,
             usesSystemProxy: usesProxyRoute
         ).compactMap(SpeedTestServer.init(record:))
-        let ranked = try await rankedByLatency(servers, session: session)
-        guard !ranked.isEmpty else { throw SpeedTestError.noServer }
-        return ranked
     }
 
     /// 读取 macOS 当前网络位置的系统代理开关。PAC/自动发现也按代理路径处理，
@@ -170,9 +166,10 @@ nonisolated enum OoklaServerDirectory {
         return try decode(data)
     }
 
-    /// 同时探测全部候选，按 HTTP 往返从快到慢排序，不可达的节点剔除。
+    /// 同时探测全部候选，按 HTTP 往返从快到慢排序，不可达的节点剔除；至少返回一台。
     /// 每台先发一次请求建立连接，再计第二次往返，避免 TCP/TLS 握手干扰排序。
-    private static func rankedByLatency(_ servers: [SpeedTestServer], session: URLSession) async throws -> [SpeedTestServer] {
+    /// 建立的连接留在 `session` 里，随后的试测复用它们。
+    static func rankedByLatency(_ servers: [SpeedTestServer], session: URLSession) async throws -> [SpeedTestServer] {
         try Task.checkCancellation()
         let samples = await withTaskGroup(of: (Int, Double)?.self) { group in
             for (index, server) in servers.enumerated() {
@@ -202,6 +199,7 @@ nonisolated enum OoklaServerDirectory {
             return results
         }
         try Task.checkCancellation()
+        guard !samples.isEmpty else { throw SpeedTestError.noServer }
         return samples.sorted { $0.1 < $1.1 }.map { servers[$0.0] }
     }
 }

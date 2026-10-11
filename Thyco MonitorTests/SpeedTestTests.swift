@@ -152,8 +152,83 @@ struct SpeedTestTests {
             let url = URL(string: "https://speed-test.invalid/\(path)")!
             return SpeedTestServer(name: path, sponsor: "", countryCode: "HK", latencyURL: url, downloadURL: url, uploadURL: url)
         }
-        #expect(try await engine.fastestByTrial(finalists).name == "success")
-        #expect(try await engine.fastestByTrial(Array(finalists.prefix(2))).name == "pending")
+        let session = URLSession(configuration: testSessionConfiguration())
+        defer { session.invalidateAndCancel() }
+        #expect(try await engine.fastestByTrial(finalists, session: session).name == "success")
+        #expect(try await engine.fastestByTrial(Array(finalists.prefix(2)), session: session).name == "pending")
+    }
+
+    @Test func trialDoesNotLetLaterResponseBenefitFromSharedBandwidth() async throws {
+        TrialURLProtocol.traffic.reset()
+        let session = trialSession()
+        defer { session.invalidateAndCancel() }
+        let selected = try await SpeedTestEngine().fastestByTrial([trialServer("fast"), trialServer("slow")], session: session)
+        #expect(selected.name == "fast")
+        #expect(TrialURLProtocol.traffic.maximumConcurrent == 1)
+        #expect(TrialURLProtocol.traffic.activeCount == 0)
+    }
+
+    @Test func cancellingTrialDoesNotStartNextCandidate() async throws {
+        TrialURLProtocol.traffic.reset()
+        let session = trialSession()
+        defer { session.invalidateAndCancel() }
+        let task = Task { try await SpeedTestEngine().fastestByTrial([trialServer("fast"), trialServer("slow")], session: session) }
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while TrialURLProtocol.traffic.activeCount == 0, clock.now < deadline {
+            try await clock.sleep(for: .milliseconds(10))
+        }
+        #expect(TrialURLProtocol.traffic.activeCount == 1)
+        let cancelled = clock.now
+        task.cancel()
+        await #expect(throws: CancellationError.self) { try await task.value }
+        #expect(cancelled.duration(to: clock.now) < .seconds(1))
+        #expect(TrialURLProtocol.traffic.startedPaths == ["fast"])
+        #expect(TrialURLProtocol.traffic.activeCount == 0)
+    }
+
+    @Test func historyDoesNotExcludeServersAfterExitChanges() throws {
+        let suite = "SpeedTestTests.routes.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let history = SpeedTestServerHistory(suiteName: suite)
+        let a = trialServer("a")
+        let b = trialServer("b")
+        for proxy in [false, true] {
+            let oldA = try #require(SpeedTestServerHistory.key(for: a, publicIP: "203.0.113.1", usesProxyRoute: proxy))
+            let oldB = try #require(SpeedTestServerHistory.key(for: b, publicIP: "203.0.113.1", usesProxyRoute: proxy))
+            history.record(50, for: oldA)
+            history.record(300, for: oldB)
+            let finalists = { (ip: String?) in
+                SpeedTestServerHistory.finalists(ranked: [a, b], megabits: history.megabits()) {
+                    SpeedTestServerHistory.key(for: $0, publicIP: ip, usesProxyRoute: proxy)
+                }.map(\.name)
+            }
+            #expect(finalists("203.0.113.1") == ["b"])
+            #expect(finalists("198.51.100.2") == ["a", "b"])
+            #expect(finalists(nil) == ["a", "b"])
+            #expect(finalists("") == ["a", "b"])
+        }
+        // 无出口信息的旧版缓存不能继续参与筛选。
+        history.record(1, for: "direct|\(a.downloadURL.absoluteString)")
+        history.record(900, for: "direct|\(b.downloadURL.absoluteString)")
+        let migrated = SpeedTestServerHistory.finalists(ranked: [a, b], megabits: history.megabits()) {
+            SpeedTestServerHistory.key(for: $0, publicIP: "198.51.100.3", usesProxyRoute: false)
+        }
+        #expect(migrated.map(\.name) == ["a", "b"])
+        #expect(SpeedTestServerHistory.key(for: a, publicIP: nil, usesProxyRoute: false) == nil)
+        #expect(SpeedTestServerHistory.key(for: a, publicIP: " \n", usesProxyRoute: false) == nil)
+    }
+
+    @Test func downloadHistoryUsesSelectionContextAndSkipsUnknownExit() throws {
+        let suite = "SpeedTestTests.selection.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let history = SpeedTestServerHistory(suiteName: suite)
+        let server = trialServer("a")
+        let key = try #require(SpeedTestServerHistory.key(for: server, publicIP: "203.0.113.1", usesProxyRoute: false))
+        let engine = SpeedTestEngine(history: history)
+        engine.recordDownload(100, for: SpeedTestSelection(server: server, historyKey: key))
+        engine.recordDownload(900, for: SpeedTestSelection(server: server, historyKey: nil))
+        #expect(history.megabits() == [key: 100])
     }
 
     @Test func finalistsAddProvenServersAndDropSlowOnes() {
@@ -331,6 +406,31 @@ struct SpeedTestTests {
         #expect(model.info?.ip == "198.51.100.1")
     }
 
+    @Test func prefetchedCandidatesOnlyServeTheSameFreshRoute() {
+        let servers = [trialServer("a")]
+        let fresh = SpeedTestCandidates(servers: servers, usesProxyRoute: true, fetchedAt: .now)
+        #expect(fresh.isUsable(forProxyRoute: true))
+        #expect(!fresh.isUsable(forProxyRoute: false))
+        let stale = SpeedTestCandidates(servers: servers, usesProxyRoute: true, fetchedAt: .now.advanced(by: .seconds(-121)))
+        #expect(!stale.isUsable(forProxyRoute: true))
+    }
+
+    @MainActor
+    @Test func startingTestKeepsIdentityRefreshInProgress() async {
+        let source = IdentitySource()
+        let model = SpeedTestModel(engine: makeEngine(path: "pending"), fetchIdentity: { await source.fetch() })
+        defer { model.shutdown() }
+        model.loadIdentity()
+        await source.waitForRequests(1)
+        model.toggle()
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(await source.requestCount == 1)
+        await source.finish(0, with: PublicNetworkInfo(ip: "203.0.113.1"))
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(model.info?.ip == "203.0.113.1")
+        #expect(model.isRunning)
+    }
+
     private func makeEngine(path: String, duration: Duration = .milliseconds(1600)) -> SpeedTestEngine {
         let url = URL(string: "https://speed-test.invalid/\(path)")!
         return SpeedTestEngine(
@@ -342,6 +442,97 @@ struct SpeedTestTests {
 
 private func ooklaRecord(name: String, cc: String, host: String) -> OoklaServerRecord {
     OoklaServerRecord(name: name, sponsor: "China Telecom", countryCode: cc, host: host, httpsFunctional: true)
+}
+
+private func trialServer(_ name: String) -> SpeedTestServer {
+    let url = URL(string: "https://speed-test.invalid/\(name)")!
+    return SpeedTestServer(name: name, sponsor: "", countryCode: "HK", latencyURL: url, downloadURL: url, uploadURL: url)
+}
+
+/// 两个端点共享 600 KB/s，慢端点上限 400 KB/s 且首字节延后 450 ms。
+/// 并发且错开的计时窗口会使慢端点受益；独占窗口应稳定选中快端点。
+private final class TrialURLProtocol: URLProtocol, @unchecked Sendable {
+    static let traffic = TrialTraffic()
+    private let lock = NSLock()
+    private let id = UUID()
+    private var timer: DispatchSourceTimer?
+    private var stopped = false
+    private var started = false
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let path = request.url!.lastPathComponent
+        let source = DispatchSource.makeTimerSource(queue: .global())
+        source.schedule(deadline: .now() + (path == "slow" ? 0.45 : 0), repeating: .milliseconds(20))
+        source.setEventHandler { [weak self] in self?.sendChunk(path: path) }
+        lock.lock()
+        timer = source
+        source.resume()
+        lock.unlock()
+    }
+
+    private func sendChunk(path: String) {
+        lock.lock()
+        guard !stopped else { lock.unlock(); return }
+        let first = !started
+        if first {
+            started = true
+            Self.traffic.start(id, path: path)
+        }
+        let bytes = Self.traffic.chunkSize(limit: path == "slow" ? 400_000 : 600_000)
+        lock.unlock()
+        if first {
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        }
+        client?.urlProtocol(self, didLoad: Data(count: bytes))
+    }
+
+    override func stopLoading() {
+        lock.lock()
+        stopped = true
+        timer?.cancel()
+        timer = nil
+        if started { Self.traffic.stop(id) }
+        lock.unlock()
+    }
+}
+
+private final class TrialTraffic: @unchecked Sendable {
+    private let lock = NSLock()
+    private var active = Set<UUID>()
+    private var maximum = 0
+    private var paths: [String] = []
+
+    var maximumConcurrent: Int { lock.withLock { maximum } }
+    var activeCount: Int { lock.withLock { active.count } }
+    var startedPaths: [String] { lock.withLock { paths } }
+
+    func reset() {
+        lock.withLock { active = []; maximum = 0; paths = [] }
+    }
+
+    func start(_ id: UUID, path: String) {
+        lock.withLock {
+            active.insert(id)
+            maximum = max(maximum, active.count)
+            paths.append(path)
+        }
+    }
+
+    func stop(_ id: UUID) { _ = lock.withLock { active.remove(id) } }
+
+    func chunkSize(limit: Int) -> Int {
+        lock.withLock { min(limit, 600_000 / active.count) / 50 }
+    }
+}
+
+private func trialSession() -> URLSession {
+    let configuration = testSessionConfiguration()
+    configuration.protocolClasses = [TrialURLProtocol.self]
+    return URLSession(configuration: configuration)
 }
 
 private func testSessionConfiguration() -> URLSessionConfiguration {
@@ -399,6 +590,8 @@ private final class LiveValues {
 private actor IdentitySource {
     private var requests: [CheckedContinuation<PublicNetworkInfo?, Never>?] = []
     private var waiter: (count: Int, continuation: CheckedContinuation<Void, Never>)?
+
+    var requestCount: Int { requests.count }
 
     func fetch() async -> PublicNetworkInfo? {
         await withCheckedContinuation { continuation in

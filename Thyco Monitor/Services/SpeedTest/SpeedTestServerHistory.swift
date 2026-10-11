@@ -9,7 +9,7 @@ nonisolated struct SpeedTestServerHistory: Sendable {
     }
 
     private static let storageKey = "speedTestServerHistory"
-    /// 过期后被排除的节点重新获得试测机会，换网络后旧成绩也不会长期左右选择。
+    /// 即使出口不变，过期节点也应重新获得试测机会。
     private static let lifetime: TimeInterval = 7 * 24 * 60 * 60
     private static let latencyFinalistCount = 3
     private static let historyFinalistCount = 2
@@ -27,8 +27,10 @@ nonisolated struct SpeedTestServerHistory: Sendable {
         suiteName.flatMap(UserDefaults.init(suiteName:)) ?? .standard
     }
 
-    static func key(for server: SpeedTestServer, usesProxyRoute: Bool) -> String {
-        "\(usesProxyRoute ? "proxy" : "direct")|\(server.downloadURL.absoluteString)"
+    /// 按出口隔离成绩；旧版不含 IP 的键不会再命中。没有新出口信息时不读写历史。
+    static func key(for server: SpeedTestServer, publicIP: String?, usesProxyRoute: Bool) -> String? {
+        guard let ip = publicIP?.trimmingCharacters(in: .whitespacesAndNewlines), !ip.isEmpty else { return nil }
+        return "\(usesProxyRoute ? "proxy" : "direct")|\(ip.lowercased())|\(server.downloadURL.absoluteString)"
     }
 
     func megabits(now: Date = .now) -> [String: Double] {
@@ -51,18 +53,19 @@ nonisolated struct SpeedTestServerHistory: Sendable {
 
     /// 延迟最低的几台加上历史成绩最好的两台进入试测，明显偏慢的节点剔除；结果保持延迟顺序在前。
     /// 没有历史时等同于只取延迟最低的几台。`ranked` 按延迟排序。
-    static func finalists(ranked: [SpeedTestServer], megabits: [String: Double], key: (SpeedTestServer) -> String) -> [SpeedTestServer] {
-        let best = ranked.compactMap { megabits[key($0)] }.max() ?? 0
+    static func finalists(ranked: [SpeedTestServer], megabits: [String: Double], key: (SpeedTestServer) -> String?) -> [SpeedTestServer] {
+        func score(_ server: SpeedTestServer) -> Double? { key(server).flatMap { megabits[$0] } }
+        let best = ranked.compactMap(score).max() ?? 0
         let eligible = ranked.filter { server in
-            megabits[key(server)].map { $0 >= best * exclusionRatio } ?? true
+            score(server).map { $0 >= best * exclusionRatio } ?? true
         }
         let proven = eligible
-            .compactMap { server in megabits[key(server)].map { (server, $0) } }
+            .compactMap { server in score(server).map { (server, $0) } }
             .sorted { $0.1 > $1.1 }
             .prefix(historyFinalistCount)
             .map(\.0)
-        var seen = Set<String>()
-        return (eligible.prefix(latencyFinalistCount) + proven).filter { seen.insert(key($0)).inserted }
+        var seen = Set<URL>()
+        return (eligible.prefix(latencyFinalistCount) + proven).filter { seen.insert($0.downloadURL).inserted }
     }
 
     private func load() -> [String: Record] {

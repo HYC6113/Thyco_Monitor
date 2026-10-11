@@ -12,12 +12,32 @@ nonisolated struct LatencyMeasurement: Sendable {
     let jitterMilliseconds: Double
 }
 
+/// 历史键随本轮选服结果传递，记录成绩时不再重新读取可能已经改变的代理设置。
+nonisolated struct SpeedTestSelection: Sendable {
+    let server: SpeedTestServer
+    let historyKey: String?
+}
+
+/// 预取的候选节点目录。目录请求冷启动最慢，面板打开时先取；延迟仍在开测时现测。
+nonisolated struct SpeedTestCandidates: Sendable {
+    /// 代理客户端切换出口不会改动系统代理设置，过久的目录可能对应旧出口。
+    private static let lifetime: Duration = .seconds(120)
+
+    let servers: [SpeedTestServer]
+    let usesProxyRoute: Bool
+    let fetchedAt: ContinuousClock.Instant
+
+    func isUsable(forProxyRoute usesProxyRoute: Bool) -> Bool {
+        self.usesProxyRoute == usesProxyRoute && fetchedAt.duration(to: .now) < Self.lifetime
+    }
+}
+
 /// 测量边界集中配置。生产路径留空端点，开测时向 Ookla 目录选择节点；测试可直接注入 URL。
 nonisolated struct SpeedTestConfiguration: Sendable {
     var latencyURL: URL?
     var downloadURL: URL?
     var uploadURL: URL?
-    var transferDuration: Duration = .seconds(8)
+    var transferDuration: Duration = .seconds(10)
     var warmupDuration: Duration = .seconds(1)
 
     var usesFixedEndpoints: Bool {
@@ -67,10 +87,27 @@ nonisolated struct SpeedTestEngine: Sendable {
         return configuration
     }
 
+    func fetchCandidates() async throws -> SpeedTestCandidates {
+        let sessionConfiguration = makeSessionConfiguration()
+        let session = URLSession(configuration: sessionConfiguration)
+        defer { session.invalidateAndCancel() }
+        let usesProxyRoute = OoklaServerDirectory.usesProxyRoute(for: sessionConfiguration)
+        return SpeedTestCandidates(
+            servers: try await OoklaServerDirectory.candidateServers(session: session, usesProxyRoute: usesProxyRoute),
+            usesProxyRoute: usesProxyRoute,
+            fetchedAt: .now
+        )
+    }
+
     /// 固定端点直接返回；否则按延迟和历史成绩选出几台 Ookla 节点，再由试下载决定。
-    func resolveServer() async throws -> SpeedTestServer {
+    /// `prefetched` 仍对应当前网络路径时省去目录请求。
+    func resolveServer(
+        prefetched: SpeedTestCandidates? = nil,
+        publicIP: @Sendable () async -> String? = { nil }
+    ) async throws -> SpeedTestSelection {
+        try Task.checkCancellation()
         if configuration.usesFixedEndpoints {
-            return SpeedTestServer(
+            let server = SpeedTestServer(
                 name: "",
                 sponsor: "",
                 countryCode: "",
@@ -78,23 +115,36 @@ nonisolated struct SpeedTestEngine: Sendable {
                 downloadURL: configuration.downloadURL!,
                 uploadURL: configuration.uploadURL!
             )
+            return SpeedTestSelection(server: server, historyKey: nil)
         }
         let sessionConfiguration = makeSessionConfiguration()
+        // 延迟探测与试测共用会话：试测在探测刚建立的连接上进行，不再承担冷启动握手。
         let session = URLSession(configuration: sessionConfiguration)
         defer { session.invalidateAndCancel() }
         let usesProxyRoute = OoklaServerDirectory.usesProxyRoute(for: sessionConfiguration)
-        let ranked = try await OoklaServerDirectory.rankedServers(session: session, usesProxyRoute: usesProxyRoute)
-        let finalists = SpeedTestServerHistory.finalists(ranked: ranked, megabits: history.megabits()) {
-            SpeedTestServerHistory.key(for: $0, usesProxyRoute: usesProxyRoute)
+        let candidates = if let prefetched, prefetched.isUsable(forProxyRoute: usesProxyRoute) {
+            prefetched.servers
+        } else {
+            try await OoklaServerDirectory.candidateServers(session: session, usesProxyRoute: usesProxyRoute)
         }
-        return try await fastestByTrial(finalists)
+        let ranked = try await OoklaServerDirectory.rankedByLatency(candidates, session: session)
+        // 身份刷新与目录探测并行；还没有本轮出口信息时跳过历史，不能沿用界面保留的旧 IP。
+        let ip = await publicIP()
+        try Task.checkCancellation()
+        let finalists = SpeedTestServerHistory.finalists(ranked: ranked, megabits: history.megabits()) {
+            SpeedTestServerHistory.key(for: $0, publicIP: ip, usesProxyRoute: usesProxyRoute)
+        }
+        let server = try await fastestByTrial(finalists, session: session)
+        return SpeedTestSelection(
+            server: server,
+            historyKey: SpeedTestServerHistory.key(for: server, publicIP: ip, usesProxyRoute: usesProxyRoute)
+        )
     }
 
     /// 记下正式测速的下载成绩，供之后选服参考。固定端点不记录。
-    func recordDownload(_ megabits: Double, on server: SpeedTestServer) {
-        guard !configuration.usesFixedEndpoints else { return }
-        let usesProxyRoute = OoklaServerDirectory.usesProxyRoute(for: makeSessionConfiguration())
-        history.record(megabits, for: SpeedTestServerHistory.key(for: server, usesProxyRoute: usesProxyRoute))
+    func recordDownload(_ megabits: Double, for selection: SpeedTestSelection) {
+        guard let key = selection.historyKey else { return }
+        history.record(megabits, for: key)
     }
 
     func clearServerHistory() {
@@ -105,38 +155,42 @@ nonisolated struct SpeedTestEngine: Sendable {
     private static let trialRampDuration: Duration = .milliseconds(400)
     private static let trialWindowDuration: Duration = .seconds(1)
 
-    /// 延迟最低不等于吞吐最高：候选同时试下载，取稳定阶段收到字节最多的一台。
+    /// 各候选依次独占试下载窗口，避免争用本机带宽或错开的结束时间影响比较。
     /// 试测都没有数据时退回第一台。`finalists` 延迟低的在前且非空。
-    func fastestByTrial(_ finalists: [SpeedTestServer]) async throws -> SpeedTestServer {
-        guard finalists.count > 1 else { return finalists[0] }
-        let received = await withTaskGroup(of: (Int, Int64).self) { group in
-            for (index, server) in finalists.enumerated() {
-                group.addTask { (index, await trialBytes(from: server.downloadURL)) }
-            }
-            var results: [(Int, Int64)] = []
-            for await result in group { results.append(result) }
-            return results
-        }
+    func fastestByTrial(_ finalists: [SpeedTestServer], session: URLSession) async throws -> SpeedTestServer {
         try Task.checkCancellation()
-        // 字节相同取排在前面的一台。
-        let best = received.max { $0.1 < $1.1 || ($0.1 == $1.1 && $0.0 > $1.0) }
-        guard let best, best.1 > 0 else { return finalists[0] }
-        return finalists[best.0]
+        guard var best = finalists.first else { throw SpeedTestError.noServer }
+        guard finalists.count > 1 else { return best }
+        var mostBytes: Int64 = 0
+        for server in finalists {
+            try Task.checkCancellation()
+            let bytes = await trialBytes(from: server.downloadURL, session: session)
+            try Task.checkCancellation()
+            // 字节相同取排在前面的一台；全部无数据时保留第一台。
+            if bytes > mostBytes {
+                best = server
+                mostBytes = bytes
+            }
+        }
+        return best
     }
 
     /// 首字节到达时握手已完成，再跳过 TCP 慢启动，只计其后固定窗口内的字节。
     /// 否则短试测比的是起步快慢，起步快但持续吞吐差的节点会胜出。
-    private func trialBytes(from url: URL) async -> Int64 {
+    /// 首字节时限按已建立的连接设定：走代理时冷启动握手常超过 1 秒。
+    private func trialBytes(from url: URL, session: URLSession) async -> Int64 {
         let clock = ContinuousClock()
         let firstByteDeadline = clock.now.advanced(by: Self.trialFirstByteTimeout)
         // 首字节检测按 50 ms 轮询，计数截止需留出余量，窗口才不会被截短。
         let limit = firstByteDeadline.advanced(by: Self.trialRampDuration + Self.trialWindowDuration + .milliseconds(200))
         let transfer = SpeedTestTransfer(direction: .download, measurementStart: clock.now, deadline: limit)
-        let session = URLSession(configuration: makeSessionConfiguration(), delegate: transfer, delegateQueue: nil)
-        defer { session.invalidateAndCancel() }
         // 下载文件可能在窗口内传完，连续请求直到 stop() 让后续请求失败。
         async let downloads: Void = {
-            while (try? await transfer.run(session.dataTask(with: Self.cacheBusted(url)))) != nil {}
+            while true {
+                let task = session.dataTask(with: Self.cacheBusted(url))
+                task.delegate = transfer
+                guard (try? await transfer.run(task)) != nil else { return }
+            }
         }()
         let received = await Self.steadyBytes(of: transfer, clock: clock, firstByteDeadline: firstByteDeadline)
         transfer.stop()

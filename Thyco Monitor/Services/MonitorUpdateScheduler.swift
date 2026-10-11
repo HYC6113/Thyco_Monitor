@@ -7,14 +7,17 @@ struct FastMetricsSample {
     let cpu: CPUSnapshot
     let memory: MemorySnapshot
     let battery: BatterySnapshot
+    /// 重置后的首个样本只为 CPU / 网络建立差分基线，这两项读数无效；其余指标正常可用。
+    let isBaseline: Bool
 
-    nonisolated static func collect() -> FastMetricsSample {
+    nonisolated static func collect(isBaseline: Bool = false) -> FastMetricsSample {
         FastMetricsSample(
             hardware: HardwareMonitor.snapshot(),
             network: NetworkMonitor.snapshot(),
             cpu: CPUMonitor.snapshot(),
             memory: MemoryMonitor.snapshot(),
-            battery: BatteryMonitor.snapshot()
+            battery: BatteryMonitor.snapshot(),
+            isBaseline: isBaseline
         )
     }
 }
@@ -26,6 +29,8 @@ final class MonitorUpdateScheduler {
     private static let fastInterval: TimeInterval = 1.0
     /// 存储：5s；电池同时响应 IOPS 通知，音频由 CoreAudio 属性监听驱动
     private static let mediumInterval: TimeInterval = 5.0
+    /// 启动时立即采一次基线样本，CPU / 网络的首个有效差值在这段间隔后给出，而不是等满一秒。
+    private static let firstFastTickDelay: TimeInterval = 0.25
 
     /// 拆成两条队列，避免存储采样阻塞快节拍
     private let fastQueue = DispatchQueue(label: "com.thyco.monitor.scheduler.fast", qos: .utility)
@@ -39,15 +44,16 @@ final class MonitorUpdateScheduler {
         onMediumTick: @escaping @Sendable (StorageSnapshot) -> Void
     ) {
         stop()
-        // 与采样排在同一队列，确保上次已开始的采样结束后再重置差分基线。
+        // 与采样排在同一队列，确保上次已开始的采样结束后再重置差分基线，且先于首个节拍执行。
         fastQueue.async {
             CPUMonitor.resetBaseline()
             NetworkMonitor.resetBaseline()
+            onFastTick(.collect(isBaseline: true))
         }
-        fastTimer = makeTimer(on: fastQueue, interval: Self.fastInterval) {
+        fastTimer = makeTimer(on: fastQueue, interval: Self.fastInterval, initialDelay: Self.firstFastTickDelay) {
             onFastTick(.collect())
         }
-        mediumTimer = makeTimer(on: mediumQueue, interval: Self.mediumInterval) {
+        mediumTimer = makeTimer(on: mediumQueue, interval: Self.mediumInterval, initialDelay: 0) {
             onMediumTick(StorageMonitor.snapshot())
         }
     }
@@ -66,11 +72,12 @@ final class MonitorUpdateScheduler {
     private func makeTimer(
         on queue: DispatchQueue,
         interval: TimeInterval,
+        initialDelay: TimeInterval,
         handler: @escaping @Sendable () -> Void
     ) -> DispatchSourceTimer {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         // 默认零容差会阻止系统合并唤醒；给 10% 余量，刷新节奏肉眼无差别。
-        timer.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(Int(interval * 100)))
+        timer.schedule(deadline: .now() + initialDelay, repeating: interval, leeway: .milliseconds(Int(interval * 100)))
         timer.setEventHandler(handler: handler)
         timer.resume()
         return timer

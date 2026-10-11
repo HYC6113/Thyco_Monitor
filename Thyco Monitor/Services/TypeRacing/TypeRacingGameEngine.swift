@@ -161,49 +161,22 @@ final class TypeRacingGameEngine {
         }
     }
 
+    /// 每帧调用：x 随下标单调递增，从左缘外第一个字符算起，越过右缘即停。
     func visibleCharacters() -> [TypeRacingVisibleChar] {
-        guard !streamText.isEmpty else { return [] }
+        let firstIndex = max(0, Int(((streamOffset - streamStartX) / Self.charWidth).rounded(.down)))
+        guard firstIndex < streamText.count else { return [] }
 
         var chars: [TypeRacingVisibleChar] = []
         chars.reserveCapacity(80)
 
-        for i in streamIndex..<streamText.count {
+        for i in firstIndex..<streamText.count {
             let x = streamStartX + CGFloat(i) * Self.charWidth - streamOffset
-            
-            // Because x is monotonically increasing, if we passed the right edge, we can stop evaluating
-            if x >= laneWidth + Self.charWidth * 2 {
-                break
-            }
-            
-            // Skip characters that have passed the left edge
-            if x <= -Self.charWidth {
-                continue
-            }
+            if x >= laneWidth + Self.charWidth * 2 { break }
+            guard x > -Self.charWidth else { continue }
 
-            let ch = streamText[i]
-            let state: TypeRacingCharState
-            if i < streamIndex {
-                state = .typed
-            } else if i == streamIndex {
-                state = .current
-            } else {
-                state = .pending
-            }
-            chars.append(TypeRacingVisibleChar(index: i, character: ch, x: x, state: state))
+            let state: TypeRacingCharState = i < streamIndex ? .typed : (i == streamIndex ? .current : .pending)
+            chars.append(TypeRacingVisibleChar(index: i, character: streamText[i], x: x, state: state))
         }
-        
-        // Let's also include typed characters that are still on screen, iterating backwards from streamIndex
-        var i = streamIndex - 1
-        while i >= 0 {
-            let x = streamStartX + CGFloat(i) * Self.charWidth - streamOffset
-            if x <= -Self.charWidth {
-                break // Passed the left edge, stop backwards iteration
-            }
-            let ch = streamText[i]
-            chars.insert(TypeRacingVisibleChar(index: i, character: ch, x: x, state: .typed), at: 0)
-            i -= 1
-        }
-        
         return chars
     }
 
