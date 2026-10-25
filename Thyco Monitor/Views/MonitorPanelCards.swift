@@ -1,4 +1,5 @@
 import AppKit
+import CoreAudio
 import SwiftUI
 
 // MARK: - 顶栏
@@ -365,7 +366,10 @@ struct SoundCard: View {
                     devicePicker(
                         title: strings.outputDevice,
                         kind: .output,
-                        selectedName: viewModel.selectedOutputDeviceName,
+                        selected: selectedLabel(
+                            id: viewModel.selectedOutputDeviceID,
+                            in: outputLabels
+                        ),
                         optionCount: viewModel.outputDevices.count,
                         emptyPlaceholder: strings.noOutputDevice
                     )
@@ -378,7 +382,10 @@ struct SoundCard: View {
                     devicePicker(
                         title: strings.inputDevice,
                         kind: .input,
-                        selectedName: viewModel.selectedInputDeviceName,
+                        selected: selectedLabel(
+                            id: viewModel.selectedInputDeviceID,
+                            in: inputLabels
+                        ),
                         optionCount: viewModel.inputDevices.count,
                         emptyPlaceholder: strings.noInputDevice
                     )
@@ -388,16 +395,28 @@ struct SoundCard: View {
         }
     }
 
+    private var outputLabels: [AudioDeviceLabel] {
+        AudioDeviceLabeler.labels(for: viewModel.outputDevices, language: viewModel.appLanguage)
+    }
+
+    private var inputLabels: [AudioDeviceLabel] {
+        AudioDeviceLabeler.labels(for: viewModel.inputDevices, language: viewModel.appLanguage)
+    }
+
+    private func selectedLabel(id: AudioDeviceID?, in labels: [AudioDeviceLabel]) -> AudioDeviceLabel? {
+        guard let id else { return labels.first }
+        return labels.first { $0.id == id }
+    }
+
     /// 设备下拉的触发按钮；列表本体由 ContentView 用 anchor preference 定位绘制
     private func devicePicker(
         title: String,
         kind: SoundDeviceKind,
-        selectedName: String,
+        selected: AudioDeviceLabel?,
         optionCount: Int,
         emptyPlaceholder: String
     ) -> some View {
         let isEmpty = optionCount == 0
-        let displayText = isEmpty || selectedName.isEmpty ? emptyPlaceholder : selectedName
         let isOpen = openDevicePicker == kind
 
         return VStack(alignment: .leading, spacing: CardRhythm.labelGap) {
@@ -411,11 +430,20 @@ struct SoundCard: View {
                 openDevicePicker = isOpen ? nil : kind
             } label: {
                 HStack(spacing: 6) {
-                    Text(displayText)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(isEmpty ? palette.secondaryText : palette.primaryText)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    if let selected, !isEmpty {
+                        AudioDeviceTitleText(
+                            name: selected.name,
+                            qualifier: selected.qualifier,
+                            nameColor: palette.primaryText,
+                            qualifierColor: palette.secondaryText
+                        )
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Text(emptyPlaceholder)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(palette.secondaryText)
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.system(size: 9, weight: .semibold))
@@ -436,6 +464,7 @@ struct SoundCard: View {
                 .contentShape(MonitorTheme.controlShape)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(selected?.accessibilityText ?? emptyPlaceholder)
             .anchorPreference(key: PickerAnchorPreferenceKey.self, value: .bounds) { [kind: $0] }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -459,7 +488,11 @@ struct SoundCard: View {
                 ) {
                     viewModel.toggleVolumeMute()
                 }
-                PanelWaveformView(value: volume.wrappedValue, colorScheme: colorScheme)
+                PanelWaveformView(
+                    value: volume.wrappedValue,
+                    colorScheme: colorScheme,
+                    isAnimating: viewModel.isPanelActive
+                )
             }
 
             PanelCapsuleSlider(

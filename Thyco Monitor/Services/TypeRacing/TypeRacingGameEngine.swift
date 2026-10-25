@@ -88,11 +88,6 @@ final class TypeRacingGameEngine {
         resetToReady()
     }
 
-    func beginIfReady() {
-        guard phase == .ready else { return }
-        startRun()
-    }
-
     func restart() {
         startRun()
     }
@@ -301,9 +296,11 @@ final class TypeRacingGameEngine {
 // MARK: - Text factory
 
 enum TypeRacingTextFactory {
-    static let charset: [Character] = Array(
-        "abcdefghijklmnopqrstuvwxyz;,."
-    )
+    static let letters: [Character] = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    static let digits: [Character] = Array("0123456789")
+    /// ASCII 英文标点。空格留给开始和重开，不进入字符流。
+    static let punctuation: [Character] = Array("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+    static let charset: [Character] = letters + digits + punctuation
     private static let allowedInput = Set(charset)
 
     static func isTypingCharacter(_ character: Character) -> Bool {
@@ -311,20 +308,26 @@ enum TypeRacingTextFactory {
         return allowedInput.contains(normalized)
     }
 
-    /// 统一为小写并修剪，便于与随机字母流比对（兼容大写与全角标点）
+    /// 保留字母大小写。全角 ASCII 与弯引号先折成半角，再和字符流逐字比对。
     static func normalizedInput(_ character: Character) -> Character? {
         if character == "\n" || character == "\r" { return character }
         if character == "\u{3000}" { return " " }
+        if character == "。" || character == "｡" { return "." }
+        if character == "“" || character == "”" { return "\"" }
+        if character == "‘" || character == "’" { return "'" }
 
-        let text = String(character)
-        if text == "；" { return ";" }
-        if text == "，" { return "," }
-        if text == "．" || text == "。" { return "." }
+        let folded = foldFullwidthASCII(character) ?? character
+        guard folded.unicodeScalars.count == 1 else { return nil }
+        return folded
+    }
 
-        if text.count == 1, let ascii = text.lowercased().first {
-            return ascii
-        }
-        return nil
+    private static func foldFullwidthASCII(_ character: Character) -> Character? {
+        guard let scalar = character.unicodeScalars.first,
+              character.unicodeScalars.count == 1,
+              (0xFF01...0xFF5E).contains(scalar.value),
+              let ascii = Unicode.Scalar(scalar.value - 0xFEE0)
+        else { return nil }
+        return Character(ascii)
     }
 
     static func initialStream() -> String {

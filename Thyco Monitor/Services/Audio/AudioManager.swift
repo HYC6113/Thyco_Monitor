@@ -41,13 +41,13 @@ final class AudioManager {
         removeListeners()
     }
 
-    func setOutputDeviceByName(_ name: String) {
-        guard let device = outputDevices.first(where: { $0.name == name }) else { return }
+    func selectOutputDevice(id: AudioDeviceID) {
+        guard let device = outputDevices.first(where: { $0.id == id }) else { return }
         setOutputDevice(device)
     }
 
-    func setInputDeviceByName(_ name: String) {
-        guard let device = inputDevices.first(where: { $0.name == name }) else { return }
+    func selectInputDevice(id: AudioDeviceID) {
+        guard let device = inputDevices.first(where: { $0.id == id }) else { return }
         setInputDevice(device)
     }
 
@@ -348,39 +348,43 @@ final class AudioManager {
     // MARK: - Read State
 
     private func refreshOutputDevices() {
-        outputDevices = getAvailableOutputDevices()
-            .map { AudioDevice(id: $0.id, name: $0.name) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        outputDevices = sortedDevices(getAvailableOutputDevices())
     }
 
     private func refreshInputDevices() {
-        inputDevices = getAvailableInputDevices()
-            .map { AudioDevice(id: $0.id, name: $0.name) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        inputDevices = sortedDevices(getAvailableInputDevices())
     }
 
     private func readCurrentOutputDevice() {
         guard let deviceID = getDefaultOutputDevice(),
-              let name = getDeviceName(for: deviceID)
+              let device = makeAudioDevice(id: deviceID)
         else { return }
 
         selectedOutputDeviceID = deviceID
         if !outputDevices.contains(where: { $0.id == deviceID }) {
-            outputDevices.append(AudioDevice(id: deviceID, name: name))
-            outputDevices.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            outputDevices = sortedDevices(outputDevices + [device])
         }
         registerVolumeListener(for: deviceID)
     }
 
     private func readCurrentInputDevice() {
         guard let deviceID = getDefaultInputDevice(),
-              let name = getDeviceName(for: deviceID)
+              let device = makeAudioDevice(id: deviceID)
         else { return }
 
         selectedInputDeviceID = deviceID
         if !inputDevices.contains(where: { $0.id == deviceID }) {
-            inputDevices.append(AudioDevice(id: deviceID, name: name))
-            inputDevices.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            inputDevices = sortedDevices(inputDevices + [device])
+        }
+    }
+
+    private func sortedDevices(_ devices: [AudioDevice]) -> [AudioDevice] {
+        devices.sorted { lhs, rhs in
+            let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            let uidOrder = lhs.uid.localizedStandardCompare(rhs.uid)
+            if uidOrder != .orderedSame { return uidOrder == .orderedAscending }
+            return lhs.id < rhs.id
         }
     }
 
@@ -638,25 +642,23 @@ final class AudioManager {
         return deviceID
     }
 
-    private func getAvailableOutputDevices() -> [(id: AudioDeviceID, name: String)] {
+    private func getAvailableOutputDevices() -> [AudioDevice] {
         enumerateDevices { deviceID in
             guard outputChannelCount(for: deviceID) > 0 else { return nil }
-            guard let name = getDeviceName(for: deviceID) else { return nil }
-            return (deviceID, name)
+            return makeAudioDevice(id: deviceID)
         }
     }
 
-    private func getAvailableInputDevices() -> [(id: AudioDeviceID, name: String)] {
+    private func getAvailableInputDevices() -> [AudioDevice] {
         enumerateDevices { deviceID in
             guard inputChannelCount(for: deviceID) > 0 else { return nil }
-            guard let name = getDeviceName(for: deviceID) else { return nil }
-            return (deviceID, name)
+            return makeAudioDevice(id: deviceID)
         }
     }
 
     private func enumerateDevices(
-        _ transform: (AudioDeviceID) -> (id: AudioDeviceID, name: String)?
-    ) -> [(id: AudioDeviceID, name: String)] {
+        _ transform: (AudioDeviceID) -> AudioDevice?
+    ) -> [AudioDevice] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -725,24 +727,55 @@ final class AudioManager {
             .reduce(0) { $0 + $1.mNumberChannels }
     }
 
-    private func getDeviceName(for deviceID: AudioDeviceID) -> String? {
+    private func makeAudioDevice(id deviceID: AudioDeviceID) -> AudioDevice? {
+        guard let name = copyStringProperty(deviceID, selector: kAudioDevicePropertyDeviceNameCFString) else {
+            return nil
+        }
+        return AudioDevice(
+            id: deviceID,
+            name: name,
+            uid: copyStringProperty(deviceID, selector: kAudioDevicePropertyDeviceUID) ?? "",
+            transport: AudioDeviceTransport(coreAudioValue: transportTypeValue(for: deviceID)),
+            manufacturer: copyStringProperty(deviceID, selector: kAudioObjectPropertyManufacturer) ?? "",
+            model: copyStringProperty(deviceID, selector: kAudioObjectPropertyModelName) ?? ""
+        )
+    }
+
+    private func transportTypeValue(for deviceID: AudioDeviceID) -> UInt32 {
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceNameCFString,
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value) == noErr else {
+            return 0
+        }
+        return value
+    }
+
+    private func copyStringProperty(
+        _ deviceID: AudioDeviceID,
+        selector: AudioObjectPropertySelector
+    ) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
 
         var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        var name: Unmanaged<CFString>?
+        var value: Unmanaged<CFString>?
 
-        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &name) == noErr,
-              let name
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value) == noErr,
+              let value
         else {
             return nil
         }
 
-        // CoreAudio 的名称属性由调用方释放；交给 ARC 接管返回的 +1 引用。
-        return name.takeRetainedValue() as String
+        // CoreAudio 的 CFString 属性由调用方释放；交给 ARC 接管返回的 +1 引用。
+        return value.takeRetainedValue() as String
     }
 
     private func notifyStateChanged() {
@@ -753,4 +786,8 @@ final class AudioManager {
 struct AudioDevice: Identifiable, Hashable {
     let id: AudioDeviceID
     let name: String
+    var uid: String = ""
+    var transport: AudioDeviceTransport = .unknown
+    var manufacturer: String = ""
+    var model: String = ""
 }

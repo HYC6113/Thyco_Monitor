@@ -92,6 +92,8 @@ final class SystemMonitorViewModel {
     var appLanguage: AppLanguage = .chs
     /// 每次面板展示递增，供界面重置临时弹层状态。
     var panelOpenGeneration = 0
+    /// 仅在面板展示并轮询指标时为 true。隐藏后仍需停止的视图动画读取此值。
+    private(set) var isPanelActive = false
 
     // Memory
     var memoryOverview: [MemoryMetric] = []
@@ -109,7 +111,6 @@ final class SystemMonitorViewModel {
     private let scheduler = MonitorUpdateScheduler()
     private let batteryObserver = BatteryPowerSourceObserver()
     private let audioManager = AudioManager()
-    private var isUpdatingAudioFromSystem = false
     private var volumeBeforeMute: Double?
     private var isMonitoring = false
     private var monitoringGeneration: UInt = 0
@@ -137,17 +138,10 @@ final class SystemMonitorViewModel {
         }
     }
 
-    var selectedOutputDeviceName: String {
-        deviceName(for: selectedOutputDeviceID, in: outputDevices) ?? ""
-    }
-
-    var selectedInputDeviceName: String {
-        deviceName(for: selectedInputDeviceID, in: inputDevices) ?? ""
-    }
-
     func startMonitoring() {
         guard !isPreview, !isMonitoring else { return }
         isMonitoring = true
+        isPanelActive = true
         monitoringGeneration &+= 1
         let generation = monitoringGeneration
 
@@ -184,6 +178,7 @@ final class SystemMonitorViewModel {
     }
 
     func stopMonitoring() {
+        isPanelActive = false
         guard isMonitoring else { return }
         isMonitoring = false
         batteryObserver.stop()
@@ -191,16 +186,15 @@ final class SystemMonitorViewModel {
         audioManager.stop()
     }
 
-    func setOutputDeviceByName(_ name: String) {
-        audioManager.setOutputDeviceByName(name)
+    func selectOutputDevice(id: AudioDeviceID) {
+        audioManager.selectOutputDevice(id: id)
     }
 
-    func setInputDeviceByName(_ name: String) {
-        audioManager.setInputDeviceByName(name)
+    func selectInputDevice(id: AudioDeviceID) {
+        audioManager.selectInputDevice(id: id)
     }
 
     func updateVolume(_ newValue: Double) {
-        guard !isUpdatingAudioFromSystem else { return }
         let effective = max(0, min(100, newValue.rounded()))
         if effective > 0 {
             volumeBeforeMute = nil
@@ -209,7 +203,6 @@ final class SystemMonitorViewModel {
     }
 
     func toggleVolumeMute() {
-        guard !isUpdatingAudioFromSystem else { return }
         if volume <= 0 {
             guard let restore = volumeBeforeMute else { return }
             volumeBeforeMute = nil
@@ -221,7 +214,6 @@ final class SystemMonitorViewModel {
     }
 
     func updateBalance(_ newValue: Double) {
-        guard !isUpdatingAudioFromSystem else { return }
         audioManager.applyBalance(newValue)
     }
 
@@ -383,7 +375,6 @@ final class SystemMonitorViewModel {
     }
 
     private func syncAudioFromManager() {
-        isUpdatingAudioFromSystem = true
         update(\.outputDevices, to: audioManager.outputDevices)
         update(\.inputDevices, to: audioManager.inputDevices)
         update(\.selectedOutputDeviceID, to: audioManager.selectedOutputDeviceID)
@@ -393,11 +384,5 @@ final class SystemMonitorViewModel {
         if volume > 0 {
             volumeBeforeMute = nil
         }
-        isUpdatingAudioFromSystem = false
-    }
-
-    private func deviceName(for id: AudioDeviceID?, in devices: [AudioDevice]) -> String? {
-        guard let id else { return devices.first?.name }
-        return devices.first(where: { $0.id == id })?.name
     }
 }

@@ -120,10 +120,6 @@ enum MonitorTheme {
     static func sectionTitleTracking(for language: AppLanguage) -> CGFloat {
         language == .eng ? 0 : sectionTitleTracking
     }
-
-    static func accentColor(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: 0x0A84FF) : Color(hex: 0x007AFF)
-    }
 }
 
 /// 暗色模式统一色板
@@ -140,7 +136,6 @@ enum MonitorDarkPalette {
     static let controlFill = Color.white.opacity(0.065)
     static let iconButtonOverlay = cardBase.opacity(0.38)
     static let cardDivider = Color.white.opacity(0.08)
-    static let neutralButtonFill = Color.white.opacity(0.06)
     static let languageTrackFill = cardBase.opacity(0.30)
     static let languageSelectedFill = cardBase.opacity(0.40)
     static let menuListOverlayOpacity: Double = 0.30

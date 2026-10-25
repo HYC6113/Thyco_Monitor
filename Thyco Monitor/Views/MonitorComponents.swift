@@ -1,3 +1,4 @@
+import CoreAudio
 import SwiftUI
 
 // MARK: - Reusable Components
@@ -854,6 +855,36 @@ struct PanelSettingsMenu: View {
     }
 }
 
+/// 设备名在前，区分信息靠后且不被截断，窄面板里同名设备仍能看清差别。
+struct AudioDeviceTitleText: View {
+    let name: String
+    let qualifier: String?
+    let nameColor: Color
+    let qualifierColor: Color
+    var nameWeight: Font.Weight = .medium
+    var qualifierWeight: Font.Weight = .medium
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(name)
+                .font(.system(size: 12, weight: nameWeight))
+                .foregroundStyle(nameColor)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(minWidth: 0, alignment: .leading)
+
+            if let qualifier, !qualifier.isEmpty {
+                Text("· \(qualifier)")
+                    .font(.system(size: 12, weight: qualifierWeight))
+                    .foregroundStyle(qualifierColor)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
+            }
+        }
+    }
+}
+
 /// 与面板风格统一的设备选择下拉列表（替代系统 NSMenu 弹窗）
 struct PanelMenuList: View {
     static let rowHeight: CGFloat = 28
@@ -864,13 +895,13 @@ struct PanelMenuList: View {
         CGFloat(min(max(optionCount, 1), maxVisibleRows)) * rowHeight + 8
     }
 
-    let options: [String]
-    let selected: String
+    let options: [AudioDeviceLabel]
+    let selectedID: AudioDeviceID?
     let colorScheme: ColorScheme
     let palette: MonitorPalette
-    let onSelect: (String) -> Void
+    let onSelect: (AudioDeviceLabel) -> Void
 
-    @State private var hoveredOption: String?
+    @State private var hoveredID: AudioDeviceID?
 
     var body: some View {
         Group {
@@ -886,28 +917,32 @@ struct PanelMenuList: View {
 
     private var rows: some View {
         VStack(spacing: 1) {
-            ForEach(options, id: \.self) { option in
+            ForEach(options) { option in
                 rowView(option)
             }
         }
         .padding(4)
     }
 
-    private func rowView(_ option: String) -> some View {
-        let isSelected = option == selected
-        let isHovered = hoveredOption == option
+    private func rowView(_ option: AudioDeviceLabel) -> some View {
+        let isSelected = option.id == selectedID
+        let isHovered = hoveredID == option.id
 
         return HStack(alignment: .center, spacing: 6) {
-            Text(option)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? palette.accent : palette.primaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 4)
+            AudioDeviceTitleText(
+                name: option.name,
+                qualifier: option.qualifier,
+                nameColor: isSelected ? palette.accent : palette.primaryText,
+                qualifierColor: isSelected ? palette.accent : palette.secondaryText,
+                nameWeight: isSelected ? .semibold : .regular,
+                qualifierWeight: isSelected ? .semibold : .medium
+            )
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             if isSelected {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(palette.accent)
+                    .layoutPriority(1)
             }
         }
         .padding(.horizontal, 8)
@@ -927,9 +962,11 @@ struct PanelMenuList: View {
         }
         .contentShape(Rectangle())
         .onHover { hovering in
-            hoveredOption = hovering ? option : (hoveredOption == option ? nil : hoveredOption)
+            hoveredID = hovering ? option.id : (hoveredID == option.id ? nil : hoveredID)
         }
         .onTapGesture { onSelect(option) }
+        .accessibilityLabel(option.accessibilityText)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -960,6 +997,8 @@ struct PanelValuePill: View {
 struct PanelWaveformView: View {
     let value: Double
     let colorScheme: ColorScheme
+    /// 面板隐藏后停止 TimelineView，避免常驻应用在无界面时继续以 12Hz 刷新。
+    var isAnimating = true
 
     private let barCount = 5
     private let barWidth: CGFloat = 2.5
@@ -971,7 +1010,7 @@ struct PanelWaveformView: View {
 
     var body: some View {
         Group {
-            if value > 0 {
+            if value > 0 && isAnimating {
                 TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { context in
                     waveformBars(phase: context.date.timeIntervalSinceReferenceDate)
                 }

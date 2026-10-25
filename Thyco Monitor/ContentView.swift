@@ -166,32 +166,12 @@ private extension ContentView {
 // MARK: - Floating Overlays
 
 private extension ContentView {
-    var outputDeviceOptionNames: [String] {
-        viewModel.outputDevices.map(\.name)
+    var outputDeviceLabels: [AudioDeviceLabel] {
+        AudioDeviceLabeler.labels(for: viewModel.outputDevices, language: viewModel.appLanguage)
     }
 
-    var inputDeviceOptionNames: [String] {
-        viewModel.inputDevices.map(\.name)
-    }
-
-    var outputDeviceBinding: Binding<String> {
-        Binding(
-            get: {
-                let name = viewModel.selectedOutputDeviceName
-                return name.isEmpty ? strings.noOutputDevice : name
-            },
-            set: { viewModel.setOutputDeviceByName($0) }
-        )
-    }
-
-    var inputDeviceBinding: Binding<String> {
-        Binding(
-            get: {
-                let name = viewModel.selectedInputDeviceName
-                return name.isEmpty ? strings.noInputDevice : name
-            },
-            set: { viewModel.setInputDeviceByName($0) }
-        )
+    var inputDeviceLabels: [AudioDeviceLabel] {
+        AudioDeviceLabeler.labels(for: viewModel.inputDevices, language: viewModel.appLanguage)
     }
 
     var launchAtLoginBinding: Binding<Bool> {
@@ -206,8 +186,10 @@ private extension ContentView {
         GeometryReader { proxy in
             if let kind = openDevicePicker, let anchor = anchors[kind] {
                 let fieldRect = proxy[anchor]
-                let options = kind == .output ? outputDeviceOptionNames : inputDeviceOptionNames
-                let selection = kind == .output ? outputDeviceBinding : inputDeviceBinding
+                let options = kind == .output ? outputDeviceLabels : inputDeviceLabels
+                let selectedID = kind == .output
+                    ? viewModel.selectedOutputDeviceID
+                    : viewModel.selectedInputDeviceID
                 let listHeight = PanelMenuList.height(optionCount: options.count)
                 let gap: CGFloat = 4
                 let listY = max(gap, fieldRect.minY - listHeight - gap)
@@ -217,11 +199,16 @@ private extension ContentView {
 
                     PanelMenuList(
                         options: options,
-                        selected: selection.wrappedValue,
+                        selectedID: selectedID,
                         colorScheme: colorScheme,
                         palette: palette,
-                        onSelect: { name in
-                            selection.wrappedValue = name
+                        onSelect: { label in
+                            switch kind {
+                            case .output:
+                                viewModel.selectOutputDevice(id: label.id)
+                            case .input:
+                                viewModel.selectInputDevice(id: label.id)
+                            }
                             openDevicePicker = nil
                         }
                     )

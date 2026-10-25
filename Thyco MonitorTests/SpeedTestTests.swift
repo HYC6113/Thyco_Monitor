@@ -70,6 +70,20 @@ struct SpeedTestTests {
         #expect(info.longitude == -118.24)
     }
 
+    @Test func cloudflareMetaDecodesObjectColo() throws {
+        let data = """
+        {
+          "clientIp":"198.51.100.10",
+          "country":"US",
+          "city":"Dulles",
+          "colo":{"iata":"IAD","lat":38.9445,"lon":-77.4558,"cca2":"US","region":"North America","city":"Dulles"}
+        }
+        """.data(using: .utf8)!
+
+        let info = try #require(PublicNetworkInfo.cloudflareMeta(data))
+        #expect(info.colo == "IAD")
+    }
+
     @Test func cloudflareTraceProvidesMinimalIdentityFallback() throws {
         let data = "ip=198.51.100.10\nloc=US\ncolo=LAX\n".data(using: .utf8)!
         let info = try #require(PublicNetworkInfo.cloudflareTrace(data))

@@ -35,10 +35,13 @@ enum PanelWindowRole {
 // MARK: - Floating Panel
 
 /// 无边框、透明背景、可成为 key 的浮动面板。
-/// 主监控面板与小游戏面板共用，差异化配置由 `PanelWindowRole` 负责。
+/// 主监控、小游戏与测速面板共用，差异化配置由 `PanelWindowRole` 负责。
 final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// 打字游戏会吞掉未收录的按键。若仍交给 NSWindow，noResponder 会播放系统提示音。
+    private var suppressesUnhandledKeyBeep = false
 
     /// 便利初始化：基于角色和内容矩形一步完成配置，消除多阶段重复配置与属性遗漏。
     convenience init(role: PanelWindowRole, contentRect: NSRect) {
@@ -49,7 +52,13 @@ final class FloatingPanel: NSPanel {
             defer: false
         )
         configureCommonProperties()
+        suppressesUnhandledKeyBeep = role == .game
         role.apply(to: self)
+    }
+
+    override func noResponder(for eventSelector: Selector) {
+        if suppressesUnhandledKeyBeep { return }
+        super.noResponder(for: eventSelector)
     }
 
     private func configureCommonProperties() {
@@ -61,7 +70,6 @@ final class FloatingPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         displaysWhenScreenProfileChanges = true
-        contentView?.wantsLayer = true
     }
 }
 

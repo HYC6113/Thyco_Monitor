@@ -33,8 +33,8 @@ Thyco Monitor is a lightweight system monitor and utility panel designed specifi
 
 #### 💡 Easter Eggs & Advanced Tricks
 - **Quick Mute**: Click the **percentage number** above the volume slider to quickly mute (set volume to 0), and click again to restore previous volume.
-- **Quick Center Balance**: When adjusting audio balance, click the **"L"** or **"R"** label on either side of the slider to immediately reset channel balance to center.
-- **Reset Local Data**: Triple-click the **"MADE BY HYC"** label in the bottom-right corner of the panel to clear all locally saved preferences and data.
+- **Quick Center Balance**: When adjusting audio balance, double-click the **"L"** or **"R"** label on either side of the slider to immediately reset channel balance to center.
+- **Reset Local Data**: Triple-click the **"MADE BY HYC"** label in the bottom-right corner of the panel to clear saved preferences and speed-test history. The Type Racing best score is cleared separately with the broom button inside the game panel.
 
 ### 🚀 Getting Started
 
@@ -57,7 +57,7 @@ Thyco Monitor is committed to user privacy and system security:
 ### ⚙️ Requirements
 
 - macOS 14.0 or later
-- Xcode 15.0 or later (for building from source)
+- Xcode 26.0 or later (for building from source; the project uses default MainActor isolation)
 
 ### 🤝 Contributing
 
@@ -98,8 +98,8 @@ Thyco Monitor 是一款专为 macOS 设计的轻量级系统监控与实用工�
 
 #### 💡 隐藏彩蛋与高级操作
 - **快速静音**：点击音量滑块上方的**数字百分比**，可一键将音量设为 0（静音），再次点击即可恢复原音量。
-- **声道快速居中**：在调整声道平衡时，点击滑块左右两侧的 **"L"** 或 **"R"** 标签，即可快速将声道平衡恢复至居中状态。
-- **重置本地数据**：连续三击面板右下角的 **"MADE BY HYC"** 字样，即可清除所有本地保存的偏好设置与数据。
+- **声道快速居中**：在调整声道平衡时，双击滑块左右两侧的 **"L"** 或 **"R"** 标签，即可快速将声道平衡恢复至居中状态。
+- **重置本地数据**：连续三击面板右下角的 **"MADE BY HYC"** 字样，即可清除已保存的偏好设置与测速记录。打字游戏的最佳成绩由游戏面板内的扫帚按钮单独清除。
 
 ### 🚀 安装与运行
 
@@ -122,7 +122,7 @@ Thyco Monitor 致力于保护用户的隐私与系统安全：
 ### ⚙️ 系统要求
 
 - macOS 14.0 或更高版本
-- Xcode 15.0 或更高版本（用于编译）
+- Xcode 26.0 或更高版本（用于编译；工程依赖默认 MainActor 隔离）
 
 ### 🤝 贡献
 

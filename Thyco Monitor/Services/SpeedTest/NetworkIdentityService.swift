@@ -55,7 +55,12 @@ nonisolated struct PublicNetworkInfo: Sendable, Equatable {
         info.timeZoneID = stringValue(payload["timezone"])
         info.isp = stringValue(payload["asOrganization"])
         info.asn = stringValue(payload["asn"])
-        info.colo = stringValue(payload["colo"])
+        // /meta 的 colo 目前是对象（含 iata），旧版是字符串；两种都接受。
+        if let colo = payload["colo"] as? [String: Any] {
+            info.colo = stringValue(colo["iata"])
+        } else {
+            info.colo = stringValue(payload["colo"])
+        }
         info.latitude = doubleValue(payload["latitude"])
         info.longitude = doubleValue(payload["longitude"])
         return info.hasContent ? info : nil

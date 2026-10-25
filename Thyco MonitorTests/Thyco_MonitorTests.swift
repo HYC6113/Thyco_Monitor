@@ -207,3 +207,120 @@ struct Thyco_MonitorTests {
         return controller
     }
 }
+
+@Suite
+struct AudioDeviceLabelerTests {
+    @Test func uniqueDeviceKeepsItsName() {
+        let labels = AudioDeviceLabeler.labels(for: [
+            AudioDevice(id: 1, name: "MacBook Pro Speakers", uid: "spk", transport: .builtIn, manufacturer: "Apple Inc.")
+        ], language: .eng)
+
+        #expect(labels.map(\.name) == ["MacBook Pro Speakers"])
+        #expect(labels.map(\.qualifier) == [nil])
+    }
+
+    @Test func duplicateNamesUseTheShortestDistinction() {
+        let labels = AudioDeviceLabeler.labels(for: [
+            AudioDevice(id: 1, name: "USB Audio Device", uid: "b", transport: .usb, manufacturer: "Focusrite Audio Engineering", model: "Scarlett 2i2"),
+            AudioDevice(id: 2, name: "USB Audio Device", uid: "a", transport: .usb, manufacturer: "Generic", model: "USB Audio Device"),
+            AudioDevice(id: 3, name: "Headphones", uid: "bt", transport: .bluetooth, manufacturer: "Apple Inc."),
+            AudioDevice(id: 4, name: "Headphones", uid: "usb", transport: .usb, manufacturer: "Sony Corporation"),
+            AudioDevice(id: 5, name: "Display", uid: "h2", transport: .hdmi, manufacturer: "LG Electronics", model: "UltraFine"),
+            AudioDevice(id: 6, name: "Display", uid: "h1", transport: .hdmi, manufacturer: "LG Electronics", model: "UltraFine"),
+            AudioDevice(id: 7, name: "Display", uid: "dp", transport: .displayPort, manufacturer: "LG Electronics", model: "UltraFine"),
+            AudioDevice(id: 8, name: "Mic", uid: "m2", transport: .usb, manufacturer: "Focusrite", model: "Scarlett 2i2"),
+            AudioDevice(id: 9, name: "Mic", uid: "m1", transport: .usb, manufacturer: "Focusrite", model: "Scarlett Solo")
+        ], language: .eng)
+
+        #expect(labels.map(\.qualifier) == [
+            "Focusrite",
+            "Generic",
+            "Bluetooth",
+            "USB",
+            "HDMI · 2",
+            "HDMI · 1",
+            "DisplayPort",
+            "Scarlett 2i2",
+            "Scarlett Solo"
+        ])
+    }
+
+    @Test func duplicateNamesIgnoreCaseAndFollowLanguage() {
+        let labels = AudioDeviceLabeler.labels(for: [
+            AudioDevice(id: 1, name: "AirPods", uid: "z", transport: .bluetooth, manufacturer: "Apple"),
+            AudioDevice(id: 2, name: " airpods ", uid: "a", transport: .bluetooth, manufacturer: "Apple")
+        ], language: .chs)
+
+        #expect(labels.map(\.name) == ["AirPods", "airpods"])
+        #expect(labels.map(\.qualifier) == ["蓝牙 · 2", "蓝牙 · 1"])
+        #expect(labels.map(\.accessibilityText) == ["AirPods · 蓝牙 · 2", "airpods · 蓝牙 · 1"])
+    }
+}
+
+@Suite
+struct TypeRacingCharacterTests {
+    @Test func streamDrawsLettersDigitsAndEnglishPunctuation() {
+        let charset = TypeRacingTextFactory.charset
+        #expect(Set(charset).count == charset.count)
+        #expect(Set(charset) == Set(TypeRacingTextFactory.letters + TypeRacingTextFactory.digits + TypeRacingTextFactory.punctuation))
+        #expect(charset.contains("a"))
+        #expect(charset.contains("A"))
+        #expect(charset.contains("7"))
+        #expect(charset.contains("!"))
+        #expect(charset.contains("\""))
+        #expect(charset.contains("\\"))
+        #expect(!charset.contains(" "))
+
+        let sample = TypeRacingTextFactory.appendChunk()
+        #expect(sample.allSatisfy { charset.contains($0) })
+    }
+
+    @Test func inputKeepsLetterCaseAndFoldsFullwidthPunctuation() {
+        #expect(TypeRacingTextFactory.normalizedInput("A") == "A")
+        #expect(TypeRacingTextFactory.normalizedInput("a") == "a")
+        #expect(TypeRacingTextFactory.normalizedInput("Ａ") == "A")
+        #expect(TypeRacingTextFactory.normalizedInput("ａ") == "a")
+        #expect(TypeRacingTextFactory.normalizedInput("7") == "7")
+        #expect(TypeRacingTextFactory.normalizedInput("!") == "!")
+        #expect(TypeRacingTextFactory.normalizedInput("１") == "1")
+        #expect(TypeRacingTextFactory.normalizedInput("！") == "!")
+        #expect(TypeRacingTextFactory.normalizedInput("“") == "\"")
+        #expect(TypeRacingTextFactory.isTypingCharacter("A"))
+        #expect(TypeRacingTextFactory.isTypingCharacter("a"))
+        #expect(TypeRacingTextFactory.isTypingCharacter("!"))
+        #expect(!TypeRacingTextFactory.isTypingCharacter(" "))
+    }
+
+    @Test func physicalKeysProduceDigitsAndShiftedPunctuation() {
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x12)) == "1")
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x12, shift: true)) == "!")
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x1D)) == "0")
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x1D, shift: true)) == ")")
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x27, shift: true)) == "\"")
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x32)) == "`")
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x32, shift: true)) == "~")
+        #expect(TypeRacingKeyInput.normalizedGameCharacter(from: keyEvent(0x00)) == "a")
+        #expect(TypeRacingKeyInput.normalizedGameCharacter(from: keyEvent(0x00, shift: true)) == "A")
+        #expect(TypeRacingKeyInput.normalizedGameCharacter(from: keyEvent(0x00, capsLock: true)) == "A")
+        #expect(TypeRacingKeyInput.normalizedGameCharacter(from: keyEvent(0x00, shift: true, capsLock: true)) == "a")
+        #expect(TypeRacingKeyInput.character(from: keyEvent(0x12, shift: true, capsLock: true)) == "!")
+    }
+
+    private func keyEvent(_ keyCode: UInt16, shift: Bool = false, capsLock: Bool = false) -> NSEvent {
+        var flags = NSEvent.ModifierFlags()
+        if shift { flags.insert(.shift) }
+        if capsLock { flags.insert(.capsLock) }
+        return NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: keyCode
+        )!
+    }
+}

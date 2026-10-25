@@ -126,6 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             if enabled {
                 self.panelController.close()
+                // 清洁模式覆盖全屏时，伴随面板不应在黑色遮罩后继续跑游戏帧或测速。
+                self.typeRacingGameController.dismiss()
+                self.speedTestPanelController.dismiss()
             }
             self.screenCleanController.setActive(enabled, language: self.monitorViewModel.appLanguage)
         }
@@ -153,6 +156,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusBarClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self else { return event }
+            // 清洁遮罩覆盖菜单栏时，原状态栏位置仍会被命中；这里放行给遮罩，避免面板在遮罩后打开。
+            guard !self.screenCleanController.isActive else { return event }
             guard StatusItemGeometry.screenFrame(of: self.statusItem?.button)?.contains(NSEvent.mouseLocation) == true else {
                 return event
             }

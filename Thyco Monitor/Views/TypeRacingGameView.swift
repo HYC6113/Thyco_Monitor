@@ -554,13 +554,12 @@ struct TypeRacingGameView: View {
         }
     }
 
-    private func handleKeyInput(_ text: String) -> Bool {
+    private func handleKeyInput(_ text: String) {
         if text == "\u{1B}" {
             onClose()
-            return true
+            return
         }
         engine.handleInput(text)
-        return true
     }
 }
 
@@ -574,7 +573,7 @@ private final class FrameClock {
 // MARK: - Key capture
 
 private struct TypeRacingKeyCaptureView: NSViewRepresentable {
-    let onInput: (String) -> Bool
+    let onInput: (String) -> Void
 
     func makeNSView(context: Context) -> TypeRacingKeyCaptureNSView {
         let view = TypeRacingKeyCaptureNSView()
@@ -588,8 +587,7 @@ private struct TypeRacingKeyCaptureView: NSViewRepresentable {
 }
 
 private final class TypeRacingKeyCaptureNSView: NSView {
-    var onInput: ((String) -> Bool)?
-    private var handledByKeyDown = false
+    var onInput: ((String) -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -600,43 +598,26 @@ private final class TypeRacingKeyCaptureNSView: NSView {
 
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 {
-            _ = onInput?("\u{1B}")
+            onInput?("\u{1B}")
             return
         }
 
         if event.isARepeat { return }
 
-        handledByKeyDown = false
-
         if let mapped = TypeRacingKeyInput.normalizedGameCharacter(from: event) {
-            handledByKeyDown = true
-            if onInput?(String(mapped)) == true { return }
+            onInput?(String(mapped))
+            return
         }
 
         if let chars = event.characters, chars.count == 1, let ch = chars.first,
            let normalized = TypeRacingTextFactory.normalizedInput(ch),
            TypeRacingTextFactory.isTypingCharacter(normalized) {
-            handledByKeyDown = true
-            if onInput?(String(normalized)) == true { return }
-        }
-
-        super.keyDown(with: event)
-    }
-
-    override func insertText(_ insertString: Any) {
-        if handledByKeyDown {
-            handledByKeyDown = false
+            onInput?(String(normalized))
             return
         }
-        guard let text = insertString as? String, !text.isEmpty else { return }
-        var accepted = ""
-        for ch in text {
-            guard let normalized = TypeRacingTextFactory.normalizedInput(ch),
-                  TypeRacingTextFactory.isTypingCharacter(normalized) else { continue }
-            accepted.append(normalized)
-        }
-        guard !accepted.isEmpty else { return }
-        _ = onInput?(accepted)
+
+        // 方向键、功能键，以及游戏字符集之外的符号：就地吞掉。
+        // super.keyDown 会沿响应链走到 NSWindow.noResponder，从而播放系统提示音。
     }
 
     override func mouseDown(with event: NSEvent) {
