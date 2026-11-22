@@ -17,9 +17,7 @@ enum MonitorPanelPositioner {
         }
 
         var panelX = buttonRect.midX - panelSize.width / 2
-        guard let screen = buttonWindow.screen ?? NSScreen.main else {
-            return NSPoint(x: panelX, y: buttonRect.minY - panelSize.height)
-        }
+        guard let screen = buttonWindow.screen ?? NSScreen.main else { return nil }
         let visibleFrame = screen.visibleFrame
         panelX = max(visibleFrame.minX + 8, min(panelX, visibleFrame.maxX - panelSize.width - 8))
         let panelY = visibleFrame.maxY - panelSize.height

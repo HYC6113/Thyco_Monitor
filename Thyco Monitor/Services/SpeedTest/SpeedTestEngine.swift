@@ -39,10 +39,6 @@ nonisolated struct SpeedTestConfiguration: Sendable {
     var uploadURL: URL?
     var transferDuration: Duration = .seconds(10)
     var warmupDuration: Duration = .seconds(1)
-
-    var usesFixedEndpoints: Bool {
-        downloadURL != nil && uploadURL != nil
-    }
 }
 
 /// 到指定 HTTP 端点的吞吐量与空闲延迟。无共享可变状态，每次传输拥有独立会话。
@@ -106,14 +102,14 @@ nonisolated struct SpeedTestEngine: Sendable {
         publicIP: @Sendable () async -> String? = { nil }
     ) async throws -> SpeedTestSelection {
         try Task.checkCancellation()
-        if configuration.usesFixedEndpoints {
+        if let downloadURL = configuration.downloadURL, let uploadURL = configuration.uploadURL {
             let server = SpeedTestServer(
                 name: "",
                 sponsor: "",
                 countryCode: "",
-                latencyURL: configuration.latencyURL ?? configuration.downloadURL!,
-                downloadURL: configuration.downloadURL!,
-                uploadURL: configuration.uploadURL!
+                latencyURL: configuration.latencyURL ?? downloadURL,
+                downloadURL: downloadURL,
+                uploadURL: uploadURL
             )
             return SpeedTestSelection(server: server, historyKey: nil)
         }

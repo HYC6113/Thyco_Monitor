@@ -25,7 +25,13 @@ enum TypeRacingWindowLayout {
         width - outerPadding * 2
     }
 
-    static let panelCornerRadius: CGFloat = 14
+    /// 测速与 Type Racing 共用的外框连续圆角。
+    static let panelCornerRadius: CGFloat = 20
+    /// 测速左右栏相对外框左右与底边的内缩。
+    static let speedTestCardInset: CGFloat = outerPadding
+    /// 测速左右栏卡片圆角。连续圆角取外框圆角减去 `speedTestCardInset`，
+    /// 贴边拐角与外框在同一位置转入直线。
+    static let speedTestCardCornerRadius: CGFloat = panelCornerRadius - speedTestCardInset
     /// 中央提示卡片圆角
     static let messageCardCornerRadius: CGFloat = 8
 

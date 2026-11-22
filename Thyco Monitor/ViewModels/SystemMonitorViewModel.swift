@@ -27,8 +27,8 @@ final class SystemMonitorViewModel {
     static let preview: SystemMonitorViewModel = {
         let viewModel = SystemMonitorViewModel(isPreview: true)
         viewModel.headerSummary = "MacBook Pro · Apple M3 Pro · macOS 15.0.0"
-        viewModel.cpuTemperatureDisplay = "42°C"
-        viewModel.fanRPMDisplay = "1,280 RPM"
+        viewModel.cpuTemperatureDisplay = "42"
+        viewModel.fanRPMDisplay = "1,280"
         viewModel.wifiConnected = true
         viewModel.uploadSpeedDisplay = "128 KB/s"
         viewModel.downloadSpeedDisplay = "2.4 MB/s"
@@ -36,7 +36,7 @@ final class SystemMonitorViewModel {
         viewModel.usedStorageDisplay = "688 GB"
         viewModel.totalStorageDisplay = "1 TB"
         viewModel.storageUsageFraction = 0.688
-        viewModel.batteryDisplay = "87%"
+        viewModel.batteryDisplay = "87"
         viewModel.batteryPercentage = 87
         viewModel.isBatteryCharging = true
         viewModel.chargingPowerDisplay = "45"
@@ -303,11 +303,8 @@ final class SystemMonitorViewModel {
             launchAtLoginEnabled = enabled
             return
         }
-        do {
-            try LaunchAtLoginService.setEnabled(enabled)
-        } catch {
-            // 用户未在系统设置中授权时 register 可能失败，回读真实状态。
-        }
+        // 用户未在系统设置中授权时 register 可能失败，直接回读真实状态。
+        try? LaunchAtLoginService.setEnabled(enabled)
         launchAtLoginEnabled = LaunchAtLoginService.isEnabled
     }
 

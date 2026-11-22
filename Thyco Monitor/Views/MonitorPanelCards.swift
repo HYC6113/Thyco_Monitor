@@ -42,15 +42,14 @@ struct PanelHeaderRow: View {
 struct CPUNetworkCard: View {
     let viewModel: SystemMonitorViewModel
     let strings: MonitorStrings
-    let titleTracking: CGFloat
 
     @Environment(\.colorScheme) private var colorScheme
 
     private var palette: MonitorPalette { .of(colorScheme) }
 
     var body: some View {
-        MonitorCard(title: strings.cpuNetworkTitle, colorScheme: colorScheme, titleTracking: titleTracking) {
-            VStack(alignment: .leading, spacing: CardRhythm.sectionGap) {
+        MonitorCard(colorScheme: colorScheme) {
+            VStack(alignment: .leading, spacing: CardRhythm.metricToLowerGap) {
                 HStack(spacing: 0) {
                     LiveMetricBlock(
                         value: viewModel.cpuTemperatureDisplay,
@@ -60,9 +59,6 @@ struct CPUNetworkCard: View {
                     )
                     .frame(maxWidth: .infinity)
 
-                    CardColumnDivider(color: palette.cardBorder)
-                        .frame(height: 42)
-
                     LiveMetricBlock(
                         value: viewModel.fanRPMDisplay,
                         unit: "rpm",
@@ -71,6 +67,7 @@ struct CPUNetworkCard: View {
                     )
                     .frame(maxWidth: .infinity)
                 }
+                .frame(height: CardRhythm.metricHeaderAreaHeight, alignment: .bottom)
 
                 VStack(alignment: .leading, spacing: CardRhythm.itemGap) {
                     CardSectionDivider(color: palette.cardBorder)
@@ -83,8 +80,6 @@ struct CPUNetworkCard: View {
                             value: viewModel.uploadSpeedDisplay,
                             palette: palette
                         )
-                        CardColumnDivider(color: palette.cardBorder)
-                            .frame(height: 28)
                         NetworkThroughput(
                             label: strings.download,
                             value: viewModel.downloadSpeedDisplay,
@@ -129,29 +124,33 @@ struct CPUNetworkCard: View {
 struct StorageCard: View {
     let viewModel: SystemMonitorViewModel
     let strings: MonitorStrings
-    let titleTracking: CGFloat
 
     @Environment(\.colorScheme) private var colorScheme
 
     private var palette: MonitorPalette { .of(colorScheme) }
 
     var body: some View {
-        MonitorCard(title: strings.storageTitle, colorScheme: colorScheme, titleTracking: titleTracking) {
+        MonitorCard(colorScheme: colorScheme) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: CardRhythm.labelGap) {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(viewModel.availableStorageDisplay.replacingOccurrences(of: " GB", with: ""))
-                                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                                .foregroundStyle(palette.primaryText)
-                                .monospacedDigit()
-                            Text("GB")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(palette.secondaryText)
-                        }
                         Text(strings.availableSpace)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(palette.secondaryText)
+
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(viewModel.availableStorageDisplay.replacingOccurrences(of: " GB", with: ""))
+                                .font(.system(size: 32, weight: .semibold, design: .rounded))
+                                .foregroundStyle(palette.primaryText)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .allowsTightening(true)
+                            Text("GB")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(palette.secondaryText)
+                                .fixedSize()
+                        }
                     }
 
                     Spacer(minLength: 8)
@@ -162,16 +161,16 @@ struct StorageCard: View {
                         Image(systemName: "internaldrive")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(palette.primaryText)
-                            .padding(.top, 2)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
+                .frame(height: CardRhythm.metricHeaderAreaHeight, alignment: .bottom)
 
                 ProgressView(value: viewModel.storageUsageFraction)
                     .progressViewStyle(PanelCapsuleProgressStyle(colorScheme: colorScheme, accent: palette.accent))
                     .frame(height: MonitorTheme.capsuleTrackHeight)
-                    .padding(.top, CardRhythm.sectionGap)
+                    .padding(.top, CardRhythm.storageHeaderToLowerGap)
 
                 HStack(spacing: 0) {
                     StorageStatItem(
@@ -212,7 +211,6 @@ struct StorageCard: View {
 struct BatteryToolsCard: View {
     let viewModel: SystemMonitorViewModel
     let strings: MonitorStrings
-    let titleTracking: CGFloat
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -227,8 +225,8 @@ struct BatteryToolsCard: View {
     }
 
     var body: some View {
-        MonitorCard(title: strings.batteryToolsTitle, colorScheme: colorScheme, titleTracking: titleTracking) {
-            VStack(alignment: .leading, spacing: CardRhythm.sectionGap) {
+        MonitorCard(colorScheme: colorScheme) {
+            VStack(alignment: .leading, spacing: CardRhythm.metricToLowerGap) {
                 HStack(spacing: 0) {
                     LiveMetricBlock(
                         value: viewModel.batteryDisplay,
@@ -245,9 +243,6 @@ struct BatteryToolsCard: View {
                     )
                     .frame(maxWidth: .infinity)
 
-                    CardColumnDivider(color: palette.cardBorder)
-                        .frame(height: 42)
-
                     LiveMetricBlock(
                         value: viewModel.cpuLoadDisplay,
                         unit: "%",
@@ -256,6 +251,7 @@ struct BatteryToolsCard: View {
                     )
                     .frame(maxWidth: .infinity)
                 }
+                .frame(height: CardRhythm.metricHeaderAreaHeight, alignment: .bottom)
 
                 VStack(alignment: .leading, spacing: 0) {
                     CardSectionDivider(color: palette.cardBorder)
@@ -612,9 +608,16 @@ struct PanelFooterRow: View {
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(palette.batteryCharging)
             .frame(width: MonitorPanelLayout.chargingPowerCapsuleContentWidth, alignment: .center)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4)
-            .languageTrackCapsuleChrome(colorScheme: colorScheme)
+            // 原来外层 chrome 的 2pt 内边距也计入外径；改用选中表面后靠内容内边距保持 114×24。
+            .padding(.horizontal, 13)
+            .padding(.vertical, 6)
+            .background {
+                // 直接使用语言切换选中段的表面，不再套外层胶囊轨道框。
+                LanguageSelectedSurface(
+                    colorScheme: colorScheme,
+                    shape: MonitorTheme.capsuleShape
+                )
+            }
             .allowsHitTesting(false)
         }
     }

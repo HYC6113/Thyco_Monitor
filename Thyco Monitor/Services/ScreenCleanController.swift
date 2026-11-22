@@ -9,7 +9,7 @@ final class ScreenCleanController {
     private var focusObservers: [NSObjectProtocol] = []
     private var preferredKeyWindow: ScreenCleanWindow?
     private var didRaiseActivationPolicy = false
-    private var isReclaimingFocus = false
+    private var focusReclaimGeneration: UInt = 0
     private(set) var isActive = false
     private var overlayLanguage: AppLanguage = .chs
 
@@ -25,6 +25,12 @@ final class ScreenCleanController {
     private func show() {
         guard !isActive else { return }
         isActive = true
+        focusReclaimGeneration &+= 1
+
+        // 在遮罩和焦点就绪前就开始吞键盘，避免切换瞬间漏出系统提示音。
+        CleanModeKeyboardSilencer.shared.start { [weak self] in
+            self?.dismiss()
+        }
 
         for screen in NSScreen.screens {
             let window = ScreenCleanWindow(
@@ -61,10 +67,6 @@ final class ScreenCleanController {
         // 遮罩先盖住屏幕，再临时成为普通前台应用，才能在各个桌面上保住键盘焦点。
         beginForegroundSession()
         orderWindowsFront()
-        // 窗口盖住屏幕之后再吞键盘。在 sendEvent 入口截住，系统才不会把按键当成未处理并播放提示音。
-        CleanModeKeyboardSilencer.shared.start { [weak self] in
-            self?.dismiss()
-        }
         installFocusGuard()
     }
 
@@ -77,6 +79,7 @@ final class ScreenCleanController {
     private func hide() {
         guard isActive else { return }
         isActive = false
+        focusReclaimGeneration &+= 1
 
         CleanModeKeyboardSilencer.shared.stop()
         removeFocusGuard()
@@ -167,6 +170,14 @@ final class ScreenCleanController {
                 using: reclaim
             )
         )
+        focusObservers.append(
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main,
+                using: reclaim
+            )
+        )
     }
 
     private func removeFocusGuard() {
@@ -179,15 +190,19 @@ final class ScreenCleanController {
     }
 
     private func reclaimKeyboardFocus() {
-        guard isActive, !isReclaimingFocus else { return }
-        isReclaimingFocus = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            defer { self.isReclaimingFocus = false }
-            guard self.isActive else { return }
-            if !NSApp.isActive || self.preferredKeyWindow?.isKeyWindow != true {
-                self.activateOverFrontmostApp()
-                self.orderWindowsFront()
+        guard isActive else { return }
+        focusReclaimGeneration &+= 1
+        let generation = focusReclaimGeneration
+
+        // 切 Space 的通知早于系统把焦点交给目标桌面，单次 activate 经常被忽略。
+        // 在过渡结束后再补两次回收；只做有限次数，不做常驻抢焦点。
+        for delay in [0.0, 0.15, 0.4] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.isActive, self.focusReclaimGeneration == generation else { return }
+                if !NSApp.isActive || self.preferredKeyWindow?.isKeyWindow != true {
+                    self.activateOverFrontmostApp()
+                    self.orderWindowsFront()
+                }
             }
         }
     }
@@ -241,7 +256,7 @@ extension NSApplication {
         let silencer = CleanModeKeyboardSilencer.shared
         if silencer.isEnabled {
             switch event.type {
-            case .keyDown, .keyUp, .flagsChanged:
+            case .keyDown, .keyUp, .flagsChanged, .systemDefined:
                 if event.type == .keyDown, event.keyCode == 53 {
                     silencer.handleEscape()
                 }

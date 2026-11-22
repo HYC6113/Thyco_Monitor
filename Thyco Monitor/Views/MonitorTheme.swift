@@ -43,14 +43,21 @@ enum MonitorPanelLayout {
 
 /// 卡片内部排版节奏
 enum CardRhythm {
-    static let titleGap: CGFloat = 8
     static let sectionGap: CGFloat = 11
     static let itemGap: CGFloat = 7
     static let rowGap: CGFloat = 6
     static let labelGap: CGFloat = 4
-    static let memoryHeaderBottomSpacing: CGFloat = titleGap
+    static let memoryHeaderBottomSpacing: CGFloat = 8
     static let memoryRowMinHeight: CGFloat = 31
     static let cardInset = EdgeInsets(top: 13, leading: 13, bottom: 13, trailing: 13)
+
+    /// 三张卡片共用的顶部指标区高度。内容底部对齐后，
+    /// 顶部文字到卡片上边缘的距离因此完全一致。
+    static let metricHeaderAreaHeight: CGFloat = 67
+    /// 顶部指标区与下半部分之间的间距；配合固定高度，下半部分仍停留在原位。
+    static let metricToLowerGap: CGFloat = 10
+    /// 存储卡片下半部分比 CPU/电池低 2pt；同时为卡片底部留出 3pt 余量。
+    static let storageHeaderToLowerGap: CGFloat = metricToLowerGap + 2
 }
 
 /// 全界面统一视觉参数（对齐 Thyco 精简版 Sound 板块）
@@ -69,7 +76,6 @@ enum MonitorTheme {
     }
 
     static let panelShape = continuousRect(panelCornerRadius)
-    static let cardShape = continuousRect(cardCornerRadius)
     static let controlShape = continuousRect(controlCornerRadius)
     static let minorShape = continuousRect(minorCornerRadius)
     static let capsuleShape = Capsule(style: .continuous)
@@ -77,8 +83,8 @@ enum MonitorTheme {
     static func panelBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.07), Color.white.opacity(0.02)]
-                : [Color.white.opacity(0.34), Color.white.opacity(0.10)],
+                ? [Color.white.opacity(0.055), Color.white.opacity(0.015)]
+                : [Color.black.opacity(0.05), Color.black.opacity(0.02)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -87,8 +93,19 @@ enum MonitorTheme {
     static func cardBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.08), Color.white.opacity(0.02)]
-                : [Color.white.opacity(0.30), Color.white.opacity(0.08)],
+                ? [Color.white.opacity(0.06), Color.white.opacity(0.015)]
+                : [Color.black.opacity(0.06), Color.black.opacity(0.025)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    /// 底部语言切换胶囊的描边，比普通卡片略强。
+    static func capsuleBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [Color.white.opacity(0.18), Color.white.opacity(0.08)]
+                : [Color.black.opacity(0.13), Color.black.opacity(0.06)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -98,19 +115,31 @@ enum MonitorTheme {
     static func menuListBorderGradient(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.16), Color.white.opacity(0.06)]
-                : [Color.white.opacity(0.56), Color.black.opacity(0.09)],
+                ? [Color.white.opacity(0.14), Color.white.opacity(0.05)]
+                : [Color.black.opacity(0.08), Color.black.opacity(0.04)],
             startPoint: .top,
             endPoint: .bottom
         )
     }
 
     static func controlBorderColor(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)
+        colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.06)
     }
 
     static func subtleBorderColor(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.035)
+        colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.045)
+    }
+
+    /// 充电状态与内存压力「正常」状态共用的正向绿色。
+    static func positiveGreen(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(hex: 0x30D158) : Color(hex: 0x34C759)
+    }
+
+    /// 卡片与语言选中胶囊共用的表面填充色。
+    static func selectedSurfaceFill(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? MonitorDarkPalette.languageSelectedFill
+            : MonitorLightPalette.languageSelectedFill
     }
 
     static let capsuleTrackHeight: CGFloat = 8
@@ -124,20 +153,17 @@ enum MonitorTheme {
 
 /// 暗色模式统一色板
 enum MonitorDarkPalette {
-    static let panelBase = Color(hex: 0x101012)
-    static let cardBase = Color(hex: 0x18181A)
+    static let panelBase = Color(hex: 0x17171A)
+    static let cardBase = Color(hex: 0x232327)
 
-    /// 实色叠层：保留毛玻璃透底，同时稳定可读性
-    /// （叠层略放轻、白色 sheen 收敛，减少深色玻璃的奶灰膜，使观感更通透）
-    static let panelOverlayOpacity: Double = 0.66
-    static let panelSheenOpacity: Double = 0.016
-    static let cardSurfaceOpacity: Double = 0.38
-    static let cardSheenOpacity: Double = 0.018
-    static let controlFill = Color.white.opacity(0.065)
-    static let iconButtonOverlay = cardBase.opacity(0.38)
+    /// 轻量毛玻璃：用稍亮一点的底色降低“黑板”的沉重感，
+    /// 但纯色叠层保持较高浓度，避免桌面内容透进来造成杂乱。
+    static let panelOverlayOpacity: Double = 0.68
+    static let controlFill = Color.white.opacity(0.06)
+    static let iconButtonOverlay = cardBase.opacity(0.42)
     static let cardDivider = Color.white.opacity(0.08)
     static let languageTrackFill = cardBase.opacity(0.30)
-    static let languageSelectedFill = cardBase.opacity(0.40)
+    static let languageSelectedFill = cardBase.opacity(0.42)
     static let menuListOverlayOpacity: Double = 0.30
     static let sliderTrackFill = Color.white.opacity(0.10)
     static let valuePillFill = Color.white.opacity(0.08)
@@ -146,18 +172,16 @@ enum MonitorDarkPalette {
 
 /// 浅色模式统一色板
 enum MonitorLightPalette {
-    /// 偏纯净的冷白底色（替代原灰色 0xF2F2F7），去除浅色玻璃的灰蒙蒙感
-    static let panelBase = Color(hex: 0xFAFBFE)
-    static let cardBase = Color.white
+    /// 纯白底色：浅色模式要的是“亮”，不是透出桌面颜色。
+    static let panelBase = Color(hex: 0xFFFFFF)
 
-    static let panelOverlayOpacity: Double = 0.50
-    static let panelSheenOpacity: Double = 0.075
-    static let cardSurfaceOpacity: Double = 0.36
-    static let cardSheenOpacity: Double = 0.06
+    /// 轻量毛玻璃：用高亮纯色叠层把面板提亮，同时保持足够浓度，
+    /// 不依赖高透明度来取巧，避免杂乱的背景透色。
+    static let panelOverlayOpacity: Double = 0.64
     static let controlFill = Color.black.opacity(0.045)
     static let iconButtonOverlay = Color.white.opacity(0.58)
-    static let languageTrackFill = Color.white.opacity(0.24)
-    static let languageSelectedFill = Color.white.opacity(0.34)
+    static let languageTrackFill = Color.black.opacity(0.07)
+    static let languageSelectedFill = Color.white.opacity(0.70)
     static let menuListOverlayOpacity: Double = 0.22
 }
 
@@ -175,23 +199,23 @@ struct MonitorPalette {
 
     static let dark = MonitorPalette(
         primaryText: Color(hex: 0xF5F5F7),
-        secondaryText: Color(hex: 0x98989D),
-        tertiaryText: Color(hex: 0x636366),
+        secondaryText: Color(hex: 0xA8A8AD),
+        tertiaryText: Color(hex: 0x6E6E73),
         controlBackground: MonitorDarkPalette.controlFill,
         cardBorder: MonitorDarkPalette.cardDivider,
         accent: Color(hex: 0x0A84FF),
-        batteryCharging: Color(hex: 0x30D158),
+        batteryCharging: MonitorTheme.positiveGreen(for: .dark),
         batteryLow: Color(hex: 0xE06458)
     )
 
     static let light = MonitorPalette(
         primaryText: Color(hex: 0x1D1D1F),
-        secondaryText: Color(hex: 0x6E6E73),
-        tertiaryText: Color(hex: 0xAEAEB2),
+        secondaryText: Color(hex: 0x5E5E63),
+        tertiaryText: Color(hex: 0x76767C),
         controlBackground: MonitorLightPalette.controlFill,
-        cardBorder: Color.black.opacity(0.05),
-        accent: Color(hex: 0x007AFF),
-        batteryCharging: Color(hex: 0x34C759),
+        cardBorder: Color.black.opacity(0.06),
+        accent: Color(hex: 0x006FE6),
+        batteryCharging: MonitorTheme.positiveGreen(for: .light),
         batteryLow: Color(hex: 0xD95048)
     )
 
@@ -203,20 +227,20 @@ struct MonitorPalette {
 extension View {
     func monitorControlShadow(colorScheme: ColorScheme) -> some View {
         shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.10 : 0.024),
+            color: Color.black.opacity(colorScheme == .dark ? 0.06 : 0.022),
             radius: colorScheme == .dark ? 2.5 : 1.5,
             x: 0,
             y: colorScheme == .dark ? 0.8 : 0.4
         )
     }
 
-    /// 卡片悬浮阴影：边距收紧后略收敛，避免贴边时阴影显得过重
+    /// 卡片悬浮阴影：降低浓度、略微放大半径，让卡片像浮在玻璃上而不是压在上面
     func monitorCardShadow(colorScheme: ColorScheme) -> some View {
         shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.075),
-            radius: colorScheme == .dark ? 2.5 : 3,
+            color: Color.black.opacity(colorScheme == .dark ? 0.12 : 0.06),
+            radius: colorScheme == .dark ? 3.5 : 3.5,
             x: 0,
-            y: colorScheme == .dark ? 1.5 : 1.2
+            y: colorScheme == .dark ? 1.8 : 1.4
         )
     }
 

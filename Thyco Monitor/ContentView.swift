@@ -107,8 +107,7 @@ private extension ContentView {
             HStack(spacing: MonitorPanelLayout.cardSpacing) {
                 CPUNetworkCard(
                     viewModel: viewModel,
-                    strings: strings,
-                    titleTracking: sectionTitleTracking
+                    strings: strings
                 )
                 .monitorCardCell(
                     width: MonitorPanelLayout.cardWidth,
@@ -117,8 +116,7 @@ private extension ContentView {
 
                 StorageCard(
                     viewModel: viewModel,
-                    strings: strings,
-                    titleTracking: sectionTitleTracking
+                    strings: strings
                 )
                 .monitorCardCell(
                     width: MonitorPanelLayout.cardWidth,
@@ -130,8 +128,7 @@ private extension ContentView {
             HStack(spacing: MonitorPanelLayout.cardSpacing) {
                 BatteryToolsCard(
                     viewModel: viewModel,
-                    strings: strings,
-                    titleTracking: sectionTitleTracking
+                    strings: strings
                 )
                 .monitorCardCell(
                     width: MonitorPanelLayout.cardWidth,
@@ -195,7 +192,7 @@ private extension ContentView {
                 let listY = max(gap, fieldRect.minY - listHeight - gap)
 
                 ZStack(alignment: .topLeading) {
-                    dismissLayer(size: proxy.size) { openDevicePicker = nil }
+                    dismissLayer { openDevicePicker = nil }
 
                     PanelMenuList(
                         options: options,
@@ -228,7 +225,7 @@ private extension ContentView {
                 let menuHeight: CGFloat = 44
 
                 ZStack(alignment: .topLeading) {
-                    dismissLayer(size: proxy.size) { isSettingsMenuOpen = false }
+                    dismissLayer { isSettingsMenuOpen = false }
 
                     PanelSettingsMenu(
                         isOn: launchAtLoginBinding,
@@ -244,9 +241,9 @@ private extension ContentView {
     }
 
     /// 铺满面板的透明层：点击浮层以外区域将其收起
-    func dismissLayer(size: CGSize, onTap: @escaping () -> Void) -> some View {
+    func dismissLayer(onTap: @escaping () -> Void) -> some View {
         Color.clear
-            .frame(width: size.width, height: size.height)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
     }

@@ -16,7 +16,7 @@ nonisolated enum SpeedTestMath {
             guard megabytes <= upper else { continue }
             let lower = marks[index]
             let span = upper - lower
-            let local = span > 0 ? (megabytes - lower) / span : 0
+            let local = (megabytes - lower) / span
             return (Double(index) + local) / Double(last)
         }
         return 1

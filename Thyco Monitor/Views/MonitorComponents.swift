@@ -72,71 +72,50 @@ struct CircleIconButton: View {
 }
 
 struct MonitorCard<Content: View>: View {
-    var title: String?
     let colorScheme: ColorScheme
-    var titleTracking: CGFloat = MonitorTheme.sectionTitleTracking
+    var cornerRadius: CGFloat = MonitorTheme.cardCornerRadius
     @ViewBuilder let content: Content
 
     init(
-        title: String? = nil,
         colorScheme: ColorScheme,
-        titleTracking: CGFloat = MonitorTheme.sectionTitleTracking,
+        cornerRadius: CGFloat = MonitorTheme.cardCornerRadius,
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
         self.colorScheme = colorScheme
-        self.titleTracking = titleTracking
+        self.cornerRadius = cornerRadius
         self.content = content()
     }
 
     private var cardSurfaceFill: Color {
-        colorScheme == .dark
-            ? MonitorDarkPalette.cardBase.opacity(MonitorDarkPalette.cardSurfaceOpacity)
-            : MonitorLightPalette.cardBase.opacity(MonitorLightPalette.cardSurfaceOpacity)
+        MonitorTheme.selectedSurfaceFill(for: colorScheme)
     }
 
-    private var cardSurfaceHighlight: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(MonitorDarkPalette.cardSheenOpacity)
-            : Color.white.opacity(MonitorLightPalette.cardSheenOpacity)
+    private var cardShape: RoundedRectangle {
+        MonitorTheme.continuousRect(cornerRadius)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let title {
-                Text(title)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .tracking(titleTracking)
-                    .padding(.bottom, CardRhythm.titleGap)
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(CardRhythm.cardInset)
+            .background {
+                cardShape
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        cardShape
+                            .fill(cardSurfaceFill)
+                    )
             }
-
-            content
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(CardRhythm.cardInset)
-        .background {
-            MonitorTheme.cardShape
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    MonitorTheme.cardShape
-                        .fill(cardSurfaceFill)
-                )
-                .overlay(
-                    MonitorTheme.cardShape
-                        .fill(cardSurfaceHighlight)
-                )
-        }
-        .clipShape(MonitorTheme.cardShape)
-        .overlay {
-            MonitorTheme.cardShape
-                .strokeBorder(
-                    MonitorTheme.cardBorderGradient(for: colorScheme),
-                    lineWidth: MonitorTheme.borderLineWidth
-                )
-        }
-        .compositingGroup()
-        .monitorCardShadow(colorScheme: colorScheme)
+            .clipShape(cardShape)
+            .overlay {
+                cardShape
+                    .strokeBorder(
+                        MonitorTheme.cardBorderGradient(for: colorScheme),
+                        lineWidth: MonitorTheme.borderLineWidth
+                    )
+            }
+            .compositingGroup()
+            .monitorCardShadow(colorScheme: colorScheme)
     }
 }
 
@@ -210,17 +189,22 @@ struct LiveMetricBlock<LeadingAccessory: View>: View {
     private var valueRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text(value)
-                .font(.system(size: 25, weight: .semibold, design: .rounded))
+                .font(.system(size: 32, weight: .semibold, design: .rounded))
                 .foregroundStyle(valueColor ?? palette.primaryText)
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .allowsTightening(true)
             Text(unit)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(palette.secondaryText)
+                .fixedSize()
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: CardRhythm.labelGap) {
+        // 占满整个半栏并居中：标题位置由半栏中心决定，不再随数字宽度左右漂移。
+        VStack(alignment: .center, spacing: CardRhythm.labelGap) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(palette.secondaryText)
@@ -232,12 +216,10 @@ struct LiveMetricBlock<LeadingAccessory: View>: View {
                             .offset(x: Self.accessoryOverlayOffset)
                     }
             } else {
-                HStack(alignment: .center, spacing: 5) {
-                    leadingAccessory()
-                    valueRow
-                }
+                valueRow
             }
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -348,9 +330,10 @@ struct StorageCleanerLaunchButton: View {
     }
 
     private var buttonBackground: Color {
-        isHovering
-            ? palette.controlBackground.opacity(colorScheme == .dark ? 1.15 : 1.05)
-            : palette.controlBackground
+        guard isHovering else { return palette.controlBackground }
+        return colorScheme == .dark
+            ? Color.white.opacity(0.10)
+            : Color.black.opacity(0.07)
     }
 }
 
@@ -439,7 +422,7 @@ struct MemoryPressureIndicator: View {
     private var indicatorColor: Color {
         switch level {
         case .normal:
-            colorScheme == .dark ? Color(hex: 0x30D158) : Color(hex: 0x34C759)
+            MonitorTheme.positiveGreen(for: colorScheme)
         case .warn:
             colorScheme == .dark ? Color(hex: 0xFFD60A) : Color(hex: 0xFF9F0A)
         case .critical:
@@ -521,15 +504,10 @@ struct LanguageTrackBackdrop<S: InsettableShape>: View {
             : MonitorLightPalette.languageTrackFill
     }
 
-    private var trackSheen: Color {
-        colorScheme == .dark ? Color.white.opacity(0.025) : Color.white.opacity(0.045)
-    }
-
     var body: some View {
         shape
             .fill(.ultraThinMaterial)
             .overlay(shape.fill(trackSurfaceFill))
-            .overlay(shape.fill(trackSheen))
     }
 }
 
@@ -546,11 +524,16 @@ struct LanguageTrackCapsuleChrome: ViewModifier {
             .overlay {
                 MonitorTheme.capsuleShape
                     .strokeBorder(
-                        MonitorTheme.cardBorderGradient(for: colorScheme),
+                        MonitorTheme.capsuleBorderGradient(for: colorScheme),
                         lineWidth: MonitorTheme.borderLineWidth
                     )
             }
-            .monitorControlShadow(colorScheme: colorScheme)
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.12 : 0.05),
+                radius: 2.5,
+                x: 0,
+                y: 1
+            )
     }
 }
 
@@ -566,9 +549,7 @@ struct LanguageSelectedSurface<S: InsettableShape>: View {
     var shape: S
 
     private var selectedSurfaceFill: Color {
-        colorScheme == .dark
-            ? MonitorDarkPalette.languageSelectedFill
-            : MonitorLightPalette.languageSelectedFill
+        MonitorTheme.selectedSurfaceFill(for: colorScheme)
     }
 
     var body: some View {
@@ -576,26 +557,13 @@ struct LanguageSelectedSurface<S: InsettableShape>: View {
             .fill(.ultraThinMaterial)
             .overlay(shape.fill(selectedSurfaceFill))
             .overlay(
-                shape.fill(colorScheme == .dark ? Color.white.opacity(0.03) : Color.white.opacity(0.05))
-            )
-            .overlay(
                 shape.strokeBorder(
-                    Color.white.opacity(colorScheme == .dark ? 0.09 : 0.20),
+                    colorScheme == .dark
+                        ? Color.white.opacity(0.06)
+                        : Color.black.opacity(0.07),
                     lineWidth: MonitorTheme.borderLineWidth
                 )
             )
-    }
-}
-
-/// 底栏圆形按钮的整圈填充：与语言切换里「已选中」分段同一叠色，不留轨道色外环。
-struct FooterSelectedCircleSurface: View {
-    let colorScheme: ColorScheme
-
-    var body: some View {
-        ZStack {
-            LanguageTrackBackdrop(colorScheme: colorScheme, shape: Circle())
-            LanguageSelectedSurface(colorScheme: colorScheme, shape: Circle())
-        }
     }
 }
 
@@ -619,7 +587,7 @@ private struct FooterCircleIconButton: View {
                 .foregroundStyle(primaryText)
                 .frame(width: diameter, height: diameter)
                 .background {
-                    FooterSelectedCircleSurface(colorScheme: colorScheme)
+                    LanguageSelectedSurface(colorScheme: colorScheme, shape: Circle())
                 }
                 .clipShape(Circle())
                 .contentShape(Circle())
@@ -801,15 +769,8 @@ struct PanelCapsuleSlider: View {
                     .frame(height: trackHeight)
 
                 MonitorTheme.capsuleShape
-                    .fill(
-                        LinearGradient(
-                            colors: [accent, accent.opacity(0.85)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(accent)
                     .frame(width: max(0, fillWidth), height: trackHeight)
-                    .shadow(color: accent.opacity(0.22), radius: 2.5, x: 0, y: 1)
 
                 if showTooltip && (isHovering || isDragging) {
                     PanelHoverTooltipBubble(text: "\(Int(value) > 0 ? "+" : "")\(Int(value))")
@@ -962,7 +923,11 @@ struct PanelMenuList: View {
         }
         .contentShape(Rectangle())
         .onHover { hovering in
-            hoveredID = hovering ? option.id : (hoveredID == option.id ? nil : hoveredID)
+            if hovering {
+                hoveredID = option.id
+            } else if hoveredID == option.id {
+                hoveredID = nil
+            }
         }
         .onTapGesture { onSelect(option) }
         .accessibilityLabel(option.accessibilityText)
@@ -1091,15 +1056,8 @@ struct PanelCapsuleProgressStyle: ProgressViewStyle {
                     .fill(track)
 
                 MonitorTheme.capsuleShape
-                    .fill(
-                        LinearGradient(
-                            colors: [accent, accent.opacity(0.85)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(accent)
                     .frame(width: max(geometry.size.width * progress, progress > 0 ? 6 : 0))
-                    .shadow(color: accent.opacity(0.22), radius: 2, y: 0.5)
             }
         }
     }

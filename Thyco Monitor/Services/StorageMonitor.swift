@@ -37,7 +37,7 @@ enum StorageMonitor {
             let used = total > available ? total - available : 0
 
             return StorageSnapshot(
-                usageFraction: min(max(Double(used) / Double(total), 0), 1),
+                usageFraction: Double(used) / Double(total),
                 availableDisplay: ByteFormatting.formatDecimalGB(available),
                 usedDisplay: ByteFormatting.formatDecimalGB(used),
                 totalDisplay: ByteFormatting.formatDecimalGB(total)

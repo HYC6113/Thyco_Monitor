@@ -42,8 +42,8 @@ struct SpeedTestPanelView: View {
                 // 顶栏底边到两栏顶边，补上 Type Racing 追车屏幕相对内容区的 6pt 内缩，
                 // 使胶囊底边到两栏顶边的距离与胶囊底边到屏幕顶边一致。
                 .padding(.top, 6)
-                .padding(.horizontal, TypeRacingWindowLayout.outerPadding)
-                .padding(.bottom, TypeRacingWindowLayout.outerPadding)
+                .padding(.horizontal, TypeRacingWindowLayout.speedTestCardInset)
+                .padding(.bottom, TypeRacingWindowLayout.speedTestCardInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
@@ -57,7 +57,7 @@ struct SpeedTestPanelView: View {
         .preferredColorScheme(colorScheme)
     }
 
-    /// 外框圆角与 Type Racing 相同：连续圆角 14。
+    /// 外框连续圆角与 Type Racing 相同：20。左右栏内缩 8 后仍有 12 的连续圆角。
     private var panelChrome: some View {
         PanelChromeBackground(
             shape: RoundedRectangle(cornerRadius: TypeRacingWindowLayout.panelCornerRadius, style: .continuous)
@@ -156,7 +156,7 @@ struct SpeedTestPanelView: View {
     // MARK: - 测速
 
     private var speedCard: some View {
-        MonitorCard(colorScheme: colorScheme) {
+        MonitorCard(colorScheme: colorScheme, cornerRadius: TypeRacingWindowLayout.speedTestCardCornerRadius) {
             VStack(spacing: 0) {
                 gauge
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -369,7 +369,7 @@ struct SpeedTestPanelView: View {
     // MARK: - 网络身份
 
     private var identityCard: some View {
-        MonitorCard(colorScheme: colorScheme) {
+        MonitorCard(colorScheme: colorScheme, cornerRadius: TypeRacingWindowLayout.speedTestCardCornerRadius) {
             identityBody
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

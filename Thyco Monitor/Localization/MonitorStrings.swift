@@ -15,10 +15,6 @@ enum AppLanguage: String, CaseIterable, Hashable {
 struct MonitorStrings {
     let language: AppLanguage
 
-    var cpuNetworkTitle: String { t("CPU / 网络", "CPU / Network") }
-    var storageTitle: String { t("存储", "Storage") }
-    var batteryToolsTitle: String { t("电池 / 工具", "Battery / Tools") }
-
     var cpuTemperature: String { t("CPU 温度", "CPU Temp") }
     var fan: String { t("风扇", "Fan") }
     var upload: String { t("上传", "Upload") }

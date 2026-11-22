@@ -41,7 +41,7 @@ enum ByteFormatting {
     }
 
     nonisolated static func formatPercent(_ value: Double) -> String {
-        String(format: "%.0f", value.rounded())
+        String(format: "%.0f", value)
     }
 
     nonisolated static func formatRPM(_ rpm: Int?) -> String {
